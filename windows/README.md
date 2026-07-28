@@ -36,7 +36,7 @@ Both commands only replace or remove scripts carrying the Leetcodex marker. An u
 
 Run `.\leetcodex.exe doctor` to inspect Codex discovery, the account browser, the CDP port, renderer injection version and instance health, and the draft directory. JSON output includes a top-level `healthy` value and structured `drafts` status; the draft check only reads path type and directory readability. Use `.\leetcodex.exe doctor --strict --json` when automation needs a nonzero exit code for an unhealthy full stack. Renderer diagnostics do not read conversations or draft contents, and LeetCode sign-in is not required for a healthy result.
 
-Drafts are stored in Codex and backed up under `%USERPROFILE%\.leetcodex\drafts\v1\`. Leetcodex restores the matching site, problem, and language draft if Codex local storage is cleared.
+Drafts are stored in Codex and backed up under `%USERPROFILE%\.leetcodex\drafts\v1\`. Leetcodex restores the matching site, problem, and language draft if Codex local storage is cleared. Native draft access validates every managed directory and rejects symbolic links and Windows reparse points so a junction cannot redirect backups outside this root.
 
 To repair an account browser profile, fully close that browser and run `.\leetcodex.exe reset-pairing --site global --yes`, or use `china`. The previous profile is retained under `%USERPROFILE%\.leetcodex\pairing-backups\`.
 

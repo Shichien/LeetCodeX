@@ -2,6 +2,13 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.54] - 2026-07-28
+
+### Security
+
+- Native draft loads and saves now validate every managed directory from `.leetcodex` through the selected problem before touching a backup, rejecting parent symbolic links and Windows reparse points instead of relying only on the read-only doctor result.
+- Draft directories are created one component at a time with private Unix modes and the complete chain is revalidated before replacement, preventing a linked parent from redirecting draft creation or overwriting an external same-named file.
+
 ## [0.2.53] - 2026-07-28
 
 ### Security

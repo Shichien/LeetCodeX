@@ -14,6 +14,12 @@ pub fn load(site: &str, problem: &str, language: &str) -> Result<Value> {
 
 fn load_at(root: &Path, site: &str, problem: &str, language: &str) -> Result<Value> {
     let path = draft_path(root, site, problem, language)?;
+    let directory = path
+        .parent()
+        .context("draft source has no parent directory")?;
+    if !validate_draft_directories(root, site, directory)? {
+        return Ok(json!({ "code": null }));
+    }
     recover_draft_backup(&path)?;
     let metadata = match fs::symlink_metadata(&path) {
         Ok(metadata) => metadata,
@@ -55,7 +61,7 @@ fn diagnostic_at(root: &Path) -> Value {
     let path = root.to_string_lossy().into_owned();
     for candidate in root.ancestors().take(3) {
         match fs::symlink_metadata(candidate) {
-            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.file_type().is_dir() => {
+            Ok(metadata) if !is_real_directory(&metadata) => {
                 return json!({
                     "status": "invalid",
                     "path": path,
@@ -93,7 +99,7 @@ fn diagnostic_at(root: &Path) -> Value {
             });
         }
     };
-    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+    if !is_real_directory(&metadata) {
         return json!({
             "status": "invalid",
             "path": path,
@@ -131,9 +137,7 @@ fn save_at(root: &Path, site: &str, problem: &str, language: &str, code: &str) -
     let directory = destination
         .parent()
         .context("draft destination has no parent directory")?;
-    fs::create_dir_all(directory)
-        .with_context(|| format!("failed to create draft directory {}", directory.display()))?;
-    secure_draft_directories(root, site, directory)?;
+    prepare_draft_directories(root, site, directory)?;
     recover_draft_backup(&destination)?;
     validate_existing_draft(&destination)?;
 
@@ -249,19 +253,102 @@ fn replace_file(source: &Path, destination: &Path) -> Result<()> {
     }
 }
 
-fn secure_draft_directories(root: &Path, site: &str, directory: &Path) -> Result<()> {
-    for path in [root.to_path_buf(), root.join(site), directory.to_path_buf()] {
-        let metadata = fs::symlink_metadata(&path)
-            .with_context(|| format!("failed to inspect draft directory {}", path.display()))?;
-        if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
-            bail!(
+fn draft_directories(root: &Path, site: &str, directory: &Path) -> Result<Vec<PathBuf>> {
+    let drafts = root
+        .parent()
+        .context("draft root has no drafts parent directory")?;
+    let leetcodex = drafts
+        .parent()
+        .context("draft root has no Leetcodex parent directory")?;
+    Ok(vec![
+        leetcodex.to_path_buf(),
+        drafts.to_path_buf(),
+        root.to_path_buf(),
+        root.join(site),
+        directory.to_path_buf(),
+    ])
+}
+
+fn validate_draft_directories(root: &Path, site: &str, directory: &Path) -> Result<bool> {
+    let mut complete = true;
+    for path in draft_directories(root, site, directory)? {
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if is_real_directory(&metadata) => {}
+            Ok(_) => bail!(
                 "draft directory must be a real directory: {}",
                 path.display()
-            );
+            ),
+            Err(error) if error.kind() == ErrorKind::NotFound => complete = false,
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!("failed to inspect draft directory {}", path.display())
+                });
+            }
         }
-        restrict_draft_directory(&path)?;
+    }
+    Ok(complete)
+}
+
+fn prepare_draft_directories(root: &Path, site: &str, directory: &Path) -> Result<()> {
+    let paths = draft_directories(root, site, directory)?;
+    for path in &paths {
+        match fs::symlink_metadata(path) {
+            Ok(metadata) if is_real_directory(&metadata) => {}
+            Ok(_) => bail!(
+                "draft directory must be a real directory: {}",
+                path.display()
+            ),
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                create_private_directory(path)?;
+            }
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!("failed to inspect draft directory {}", path.display())
+                });
+            }
+        }
+    }
+    if !validate_draft_directories(root, site, directory)? {
+        bail!("draft directory chain changed while it was being prepared");
+    }
+    for path in paths.iter().skip(2) {
+        restrict_draft_directory(path)?;
     }
     Ok(())
+}
+
+fn create_private_directory(path: &Path) -> Result<()> {
+    private_directory_builder()
+        .create(path)
+        .with_context(|| format!("failed to create draft directory {}", path.display()))
+}
+
+#[cfg(unix)]
+fn private_directory_builder() -> fs::DirBuilder {
+    use std::os::unix::fs::DirBuilderExt;
+    let mut builder = fs::DirBuilder::new();
+    builder.mode(0o700);
+    builder
+}
+
+#[cfg(not(unix))]
+fn private_directory_builder() -> fs::DirBuilder {
+    fs::DirBuilder::new()
+}
+
+fn is_real_directory(metadata: &fs::Metadata) -> bool {
+    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(unix)]
@@ -453,6 +540,29 @@ mod tests {
         assert!(save_at(&root, "global", "two-sum", "cpp", "replacement").is_err());
         assert_eq!(fs::read_to_string(external).unwrap(), "outside");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symbolic_link_draft_parents_cannot_escape_the_managed_root() {
+        use std::os::unix::fs::symlink;
+
+        let base = temporary_root();
+        let root = base.join(".leetcodex").join("drafts").join("v1");
+        let external = base.join("external");
+        let external_problem = external.join("v1").join("global").join("two-sum");
+        fs::create_dir_all(&external_problem).unwrap();
+        fs::create_dir_all(base.join(".leetcodex")).unwrap();
+        fs::write(external_problem.join("cpp.txt"), "outside").unwrap();
+        symlink(&external, base.join(".leetcodex").join("drafts")).unwrap();
+
+        assert!(load_at(&root, "global", "two-sum", "cpp").is_err());
+        assert!(save_at(&root, "global", "two-sum", "cpp", "replacement").is_err());
+        assert_eq!(
+            fs::read_to_string(external_problem.join("cpp.txt")).unwrap(),
+            "outside"
+        );
+        fs::remove_dir_all(base).unwrap();
     }
 
     #[cfg(unix)]

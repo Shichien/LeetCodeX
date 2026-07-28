@@ -1,6 +1,6 @@
 [package]
 name = "leetcodex"
-version = "0.2.55"
+version = "0.2.56"
 edition = "2024"
 license = "MIT"
 description = "Local algorithm practice injected into the Codex desktop composer"

@@ -2,6 +2,14 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.56] - 2026-07-28
+
+### Security
+
+- Login profile creation, launcher startup hardening, pairing diagnostics, backup listing, reset, and restore now validate the shared Leetcodex data parent as well as each profile or backup directory.
+- Pairing directories are created one component at a time with private Unix modes, while symbolic links and Windows reparse points are rejected before profile or Cookie data can be created, moved, listed, or restored through them.
+- Backup entries use no-follow metadata, restore treats broken links as existing destinations, and profile/backup moves are restricted to a verified shared parent directory.
+
 ## [0.2.55] - 2026-07-28
 
 ### Security

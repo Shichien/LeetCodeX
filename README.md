@@ -61,7 +61,7 @@ Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式。
 ./target/release/leetcodex reset-pairing --site china --yes
 ```
 
-命令只处理指定站点，并把原配置移动到 `~/.leetcodex/pairing-backups/`。浏览器仍连接或存在活动 Chromium 单实例标记时会拒绝执行。
+命令只处理指定站点，并把原配置移动到 `~/.leetcodex/pairing-backups/`。浏览器仍连接或存在活动 Chromium 单实例标记时会拒绝执行。配置、备份及其共享的 `.leetcodex` 父目录必须是非符号链接、非 Windows reparse point 的真实目录，否则 reset 会在移动 Cookie 数据前失败。
 
 查看和恢复备份：
 
@@ -70,7 +70,7 @@ Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式。
 ./target/release/leetcodex restore-pairing --site global --backup global-profile-<timestamp>-<pid> --yes
 ```
 
-恢复命令不会覆盖已有配置。备份名称必须属于所选站点且符合 Leetcodex 生成格式，符号链接和带活动 Chromium 标记的目录会被拒绝。
+恢复命令不会覆盖已有配置。备份名称必须属于所选站点且符合 Leetcodex 生成格式，符号链接、Windows reparse point、带活动 Chromium 标记的目录以及不与目标 profile 共享受控父目录的备份都会被拒绝。
 
 ## 操作
 
@@ -174,7 +174,7 @@ GNU 包会单独标记为 `windows-x64-gnu`，不会替代 GitHub Release 中由
 - 启动器锁写入 `~/.leetcodex/runtime/`，目录链和锁文件必须是非符号链接、非 Windows reparse point 的真实对象；锁元数据读写均通过经过验证的文件句柄完成。
 - 账号桥使用 Codex 的本地 CDP 绑定，并要求每次启动随机生成的 256 位令牌；不会开放额外 HTTP 端口。
 - 全球站和中国站使用独立配置目录，并由 Chromium 分别分配动态回环调试端口。
-- Unix 系统上的专用账号配置目录限制为当前用户访问，并拒绝使用符号链接作为配置目录。
+- Unix 系统上的专用账号配置目录限制为当前用户访问；登录、诊断、reset 和 restore 会逐级拒绝配置或备份路径中的符号链接及 Windows reparse point。
 - 用户代码在独立 Worker 中执行，并设置 2 秒超时。
 
 ## 项目边界

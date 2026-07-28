@@ -38,7 +38,7 @@ Run `.\leetcodex.exe doctor` to inspect Codex discovery, the account browser, th
 
 Drafts are stored in Codex and backed up under `%USERPROFILE%\.leetcodex\drafts\v1\`. Leetcodex restores the matching site, problem, and language draft if Codex local storage is cleared. Native draft access validates every managed directory and rejects symbolic links and Windows reparse points so a junction cannot redirect backups outside this root.
 
-To repair an account browser profile, fully close that browser and run `.\leetcodex.exe reset-pairing --site global --yes`, or use `china`. The previous profile is retained under `%USERPROFILE%\.leetcodex\pairing-backups\`.
+To repair an account browser profile, fully close that browser and run `.\leetcodex.exe reset-pairing --site global --yes`, or use `china`. The previous profile is retained under `%USERPROFILE%\.leetcodex\pairing-backups\`. Profiles, backups, and their shared data parent reject symbolic links, junctions, and other Windows reparse points before Cookie data is moved.
 
 Use `.\leetcodex.exe list-pairing-backups --site global` to list backups, then `.\leetcodex.exe restore-pairing --site global --backup <name> --yes` to restore one. Restore never overwrites an existing profile.
 

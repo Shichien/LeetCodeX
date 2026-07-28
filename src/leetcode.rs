@@ -175,23 +175,23 @@ pub fn secure_existing_pairing_profiles() -> Result<()> {
 }
 
 fn prepare_pairing_profile_directory(profile: &Path) -> Result<()> {
-    fs::create_dir_all(profile)
-        .with_context(|| format!("failed to create browser profile {}", profile.display()))?;
+    let parent = pairing_data_parent(profile)?;
+    prepare_private_pairing_directory(parent, "Leetcodex data directory")?;
+    prepare_private_pairing_directory(profile, "pairing profile")?;
+    validate_real_directory(parent, "Leetcodex data directory")?;
     validate_real_directory(profile, "pairing profile")?;
     restrict_pairing_profile_directory(profile)
 }
 
 fn secure_existing_pairing_profile(profile: &Path) -> Result<bool> {
-    match fs::symlink_metadata(profile) {
-        Ok(_) => {
-            validate_real_directory(profile, "pairing profile")?;
-            restrict_pairing_profile_directory(profile)?;
-            Ok(true)
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error)
-            .with_context(|| format!("failed to inspect pairing profile {}", profile.display())),
+    if !real_directory_exists(pairing_data_parent(profile)?, "Leetcodex data directory")? {
+        return Ok(false);
     }
+    if !real_directory_exists(profile, "pairing profile")? {
+        return Ok(false);
+    }
+    restrict_pairing_profile_directory(profile)?;
+    Ok(true)
 }
 
 #[cfg(unix)]
@@ -236,6 +236,16 @@ pub fn pairing_diagnostic(site: Site) -> Value {
             });
         }
     };
+    match pairing_profile_path_is_safe(&profile) {
+        Ok(_) => {}
+        Err(error) => {
+            return json!({
+                "status": "unavailable",
+                "profile": profile.to_string_lossy(),
+                "detail": format!("{error:#}"),
+            });
+        }
+    }
     let client = match http_client() {
         Ok(client) => client,
         Err(error) => {
@@ -289,10 +299,13 @@ pub fn list_pairing_backups(site: Site) -> Result<Value> {
 }
 
 fn list_pairing_backups_at(site: Site, backup_root: &Path) -> Result<Value> {
-    if !backup_root.exists() {
+    let parent = pairing_data_parent(backup_root)?;
+    if !real_directory_exists(parent, "Leetcodex data directory")? {
         return Ok(json!({ "site": site, "backups": [] }));
     }
-    validate_real_directory(backup_root, "pairing backup root")?;
+    if !real_directory_exists(backup_root, "pairing backup root")? {
+        return Ok(json!({ "site": site, "backups": [] }));
+    }
     let mut backups = fs::read_dir(backup_root)
         .with_context(|| format!("failed to read pairing backups {}", backup_root.display()))?
         .filter_map(|entry| entry.ok())
@@ -301,13 +314,14 @@ fn list_pairing_backups_at(site: Site, backup_root: &Path) -> Result<Value> {
             if validate_pairing_backup_name(site, &name).is_err() {
                 return None;
             }
-            let metadata = entry.file_type().ok()?;
-            if !metadata.is_dir() || metadata.is_symlink() {
+            let path = entry.path();
+            let metadata = fs::symlink_metadata(&path).ok()?;
+            if !is_real_directory(&metadata) {
                 return None;
             }
             Some(json!({
                 "name": name,
-                "path": entry.path().to_string_lossy(),
+                "path": path.to_string_lossy(),
             }))
         })
         .collect::<Vec<_>>();
@@ -333,11 +347,21 @@ fn restore_pairing_profile(
     backup_name: &str,
 ) -> Result<()> {
     validate_pairing_backup_name(site, backup_name)?;
-    if profile.exists() {
-        bail!(
-            "the current {} pairing profile already exists; reset it before restoring a backup",
-            site.host()
-        );
+    validate_shared_pairing_parent(profile, backup_root)?;
+    validate_real_directory(pairing_data_parent(profile)?, "Leetcodex data directory")?;
+    match fs::symlink_metadata(profile) {
+        Ok(_) => {
+            bail!(
+                "the current {} pairing profile already exists; reset it before restoring a backup",
+                site.host()
+            );
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error).with_context(|| {
+                format!("failed to inspect pairing profile {}", profile.display())
+            });
+        }
     }
     validate_real_directory(backup_root, "pairing backup root")?;
     let backup = backup_root.join(backup_name);
@@ -351,6 +375,19 @@ fn restore_pairing_profile(
             profile.display()
         )
     })?;
+    validate_real_directory(profile, "restored pairing profile")?;
+    Ok(())
+}
+
+fn pairing_data_parent(path: &Path) -> Result<&Path> {
+    path.parent()
+        .context("pairing path has no Leetcodex data directory")
+}
+
+fn validate_shared_pairing_parent(profile: &Path, backup_root: &Path) -> Result<()> {
+    if pairing_data_parent(profile)? != pairing_data_parent(backup_root)? {
+        bail!("pairing profile and backup root must share the same Leetcodex data directory");
+    }
     Ok(())
 }
 
@@ -386,12 +423,72 @@ fn validate_pairing_backup_name(site: Site, value: &str) -> Result<()> {
 }
 
 fn validate_real_directory(path: &Path, label: &str) -> Result<()> {
-    let metadata = fs::symlink_metadata(path)
-        .with_context(|| format!("{label} does not exist: {}", path.display()))?;
-    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
-        bail!("{label} must be a real directory: {}", path.display());
+    if !real_directory_exists(path, label)? {
+        bail!("{label} does not exist: {}", path.display());
     }
     Ok(())
+}
+
+fn real_directory_exists(path: &Path, label: &str) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if is_real_directory(&metadata) => Ok(true),
+        Ok(_) => bail!("{label} must be a real directory: {}", path.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => {
+            Err(error).with_context(|| format!("failed to inspect {label} {}", path.display()))
+        }
+    }
+}
+
+fn is_real_directory(metadata: &fs::Metadata) -> bool {
+    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return false;
+        }
+    }
+    true
+}
+
+fn pairing_profile_path_is_safe(profile: &Path) -> Result<bool> {
+    if !real_directory_exists(pairing_data_parent(profile)?, "Leetcodex data directory")? {
+        return Ok(false);
+    }
+    real_directory_exists(profile, "pairing profile")
+}
+
+fn prepare_private_pairing_directory(path: &Path, label: &str) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if is_real_directory(&metadata) => return Ok(()),
+        Ok(_) => bail!("{label} must be a real directory: {}", path.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to inspect {label} {}", path.display()));
+        }
+    }
+    private_pairing_directory_builder()
+        .create(path)
+        .with_context(|| format!("failed to create {label} {}", path.display()))?;
+    validate_real_directory(path, label)
+}
+
+#[cfg(unix)]
+fn private_pairing_directory_builder() -> fs::DirBuilder {
+    use std::os::unix::fs::DirBuilderExt;
+    let mut builder = fs::DirBuilder::new();
+    builder.mode(0o700);
+    builder
+}
+
+#[cfg(not(unix))]
+fn private_pairing_directory_builder() -> fs::DirBuilder {
+    fs::DirBuilder::new()
 }
 
 fn active_profile_marker(profile: &Path) -> Option<PathBuf> {
@@ -525,23 +622,35 @@ fn backup_pairing_profile(
     backup_root: &Path,
     profile_name: &str,
 ) -> Result<PathBuf> {
-    fs::create_dir_all(backup_root).with_context(|| {
-        format!(
-            "failed to create pairing backup directory {}",
-            backup_root.display()
-        )
-    })?;
+    validate_shared_pairing_parent(profile, backup_root)?;
+    validate_real_directory(pairing_data_parent(profile)?, "Leetcodex data directory")?;
+    validate_real_directory(profile, "pairing profile")?;
+    prepare_private_pairing_directory(backup_root, "pairing backup root")?;
+    validate_real_directory(
+        pairing_data_parent(backup_root)?,
+        "Leetcodex data directory",
+    )?;
+    validate_real_directory(backup_root, "pairing backup root")?;
     restrict_pairing_backup_directory(backup_root)?;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("system clock is before the Unix epoch")?
         .as_secs();
     let backup = backup_root.join(format!("{profile_name}-{timestamp}-{}", std::process::id()));
-    if backup.exists() {
-        bail!(
+    match fs::symlink_metadata(&backup) {
+        Ok(_) => bail!(
             "pairing backup destination already exists: {}",
             backup.display()
-        );
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error).with_context(|| {
+                format!(
+                    "failed to inspect pairing backup destination {}",
+                    backup.display()
+                )
+            });
+        }
     }
     fs::rename(profile, &backup).with_context(|| {
         format!(
@@ -1354,6 +1463,75 @@ mod tests {
         assert!(prepare_pairing_profile_directory(&linked).is_err());
         assert!(external.is_dir());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn linked_pairing_data_parent_cannot_redirect_profile_creation() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "leetcodex-pairing-parent-link-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        let data = base.join(".leetcodex");
+        let external = base.join("external");
+        let profile = data.join("global-profile");
+        fs::create_dir_all(&base).unwrap();
+        fs::create_dir_all(&external).unwrap();
+        symlink(&external, &data).unwrap();
+
+        assert!(prepare_pairing_profile_directory(&profile).is_err());
+        assert!(secure_existing_pairing_profile(&profile).is_err());
+        assert!(pairing_profile_path_is_safe(&profile).is_err());
+        assert!(!external.join("global-profile").exists());
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn linked_pairing_backup_root_cannot_redirect_reset_or_restore() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "leetcodex-pairing-backup-link-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        let data = base.join(".leetcodex");
+        let profile = data.join("global-profile");
+        let restore_target = data.join("restored-global-profile");
+        let backups = data.join("pairing-backups");
+        let external = base.join("external-backups");
+        let backup_name = "global-profile-123-456";
+        fs::create_dir_all(&profile).unwrap();
+        fs::create_dir_all(external.join(backup_name)).unwrap();
+        fs::write(profile.join("Cookies"), "current session").unwrap();
+        fs::write(external.join(backup_name).join("Cookies"), "old session").unwrap();
+        symlink(&external, &backups).unwrap();
+
+        assert!(list_pairing_backups_at(Site::Global, &backups).is_err());
+        assert!(backup_pairing_profile(&profile, &backups, "global-profile").is_err());
+        assert!(
+            restore_pairing_profile(Site::Global, &restore_target, &backups, backup_name).is_err()
+        );
+        assert_eq!(
+            fs::read_to_string(profile.join("Cookies")).unwrap(),
+            "current session"
+        );
+        assert_eq!(
+            fs::read_to_string(external.join(backup_name).join("Cookies")).unwrap(),
+            "old session"
+        );
+        assert!(!restore_target.exists());
+        assert!(
+            fs::symlink_metadata(&backups)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

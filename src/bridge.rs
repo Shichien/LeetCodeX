@@ -52,6 +52,10 @@ fn dispatch(request: &Value) -> Result<Value> {
         "/api/question" => {
             leetcode::question(site_from(body)?, required_string(body, "titleSlug")?)
         }
+        "/api/solution" => {
+            leetcode::official_solution(site_from(body)?, required_string(body, "titleSlug")?)
+        }
+        "/api/playground" => leetcode::playground(site_from(body)?, required_string(body, "uuid")?),
         "/api/submit" => leetcode::submit(
             site_from(body)?,
             required_string(body, "titleSlug")?,

@@ -2,6 +2,19 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.62] - 2026-07-29
+
+### Added
+
+- Connected official problems now expose a compact `Answer` action that loads the selected site's official Editorial and its official playground implementations.
+- Users can choose an Editorial approach and any available implementation language, then start a temporary CotypeX session that follows the official answer exactly.
+- Official-answer practice supports additional one-session languages such as C, C++, Kotlin, Python 3, Ruby, Scala, and Swift without adding unsupported choices to the normal CotypeX corpus menu.
+
+### Fixed
+
+- Leaving official-answer practice restores the original Codex draft and the user's previous CotypeX language, source, topic, and preset instead of persisting answer-mode settings.
+- Premium, inaccessible, missing, malformed, oversized, and code-free Editorial responses now produce explicit errors without replacing the user's solution draft.
+
 ## [0.2.61] - 2026-07-29
 
 ### Added

@@ -8,7 +8,7 @@ Leetcodex adds LeetCode problem solving, CotypeX code typing, a VS Code-style ed
 2. Double-click `Start Leetcodex.cmd`, or run `leetcodex.exe run` in PowerShell. On failure, the launcher keeps the original exit code and pauses so the error remains visible.
 3. When Codex opens, press `Ctrl+Alt+L` for LeetCode mode or `Ctrl+Alt+T` for Typing mode.
 
-Use `Ctrl+Enter` to run examples, `Ctrl+F` to search code, and the Vim toolbar switch to enable Vim bindings. Inside Vim mode, `Esc` returns to NORMAL mode. Compact toolbar controls switch directly between LeetCode and Typing; press the active mode's shortcut again to leave and restore the Codex draft.
+Use `Ctrl+Enter` to run examples, `Ctrl+F` to search code, and the Vim toolbar switch to enable Vim bindings. `Answer` on a connected problem loads the official Editorial and starts CotypeX with the selected approach and language. Inside Vim mode, `Esc` returns to NORMAL mode. Compact toolbar controls switch directly between LeetCode and Typing; press the active mode's shortcut again to leave and restore the Codex draft.
 
 Choose `leetcode.com` or `leetcode.cn`, then select `Login` to pair a dedicated Chrome or Edge profile. Passwords and cookies remain in that browser profile.
 

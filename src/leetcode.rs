@@ -66,6 +66,32 @@ const QUESTION_QUERY: &str = r#"
   }
 "#;
 
+const SOLUTION_QUERY: &str = r#"
+  query leetcodexSolution($titleSlug: String!) {
+    question(titleSlug: $titleSlug) {
+      solution {
+        id
+        title
+        content
+        canSeeDetail
+      }
+    }
+  }
+"#;
+
+const PLAYGROUND_QUERY: &str = r#"
+  query leetcodexPlayground($uuid: String!) {
+    playground(uuid: $uuid) {
+      name
+      selectedLangSlug
+    }
+    allPlaygroundCodes(uuid: $uuid) {
+      code
+      langSlug
+    }
+  }
+"#;
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Site {
@@ -756,6 +782,26 @@ pub fn question(site: Site, title_slug: &str) -> Result<Value> {
     )
 }
 
+pub fn official_solution(site: Site, title_slug: &str) -> Result<Value> {
+    validate_title_slug(title_slug)?;
+    graphql(
+        site,
+        SOLUTION_QUERY,
+        json!({ "titleSlug": title_slug }),
+        "leetcodexSolution",
+    )
+}
+
+pub fn playground(site: Site, uuid: &str) -> Result<Value> {
+    validate_playground_uuid(uuid)?;
+    graphql(
+        site,
+        PLAYGROUND_QUERY,
+        json!({ "uuid": uuid }),
+        "leetcodexPlayground",
+    )
+}
+
 pub fn submit(
     site: Site,
     title_slug: &str,
@@ -833,6 +879,18 @@ fn validate_title_slug(value: &str) -> Result<()> {
         || value.ends_with('-')
     {
         bail!("titleSlug contains unsupported characters");
+    }
+    Ok(())
+}
+
+fn validate_playground_uuid(value: &str) -> Result<()> {
+    if value.is_empty()
+        || value.len() > 64
+        || !value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    {
+        bail!("playground id contains unsupported characters");
     }
     Ok(())
 }
@@ -1307,6 +1365,16 @@ mod tests {
         assert!(validate_title_slug("../submissions").is_err());
         assert!(validate_title_slug("two_sum").is_err());
         assert!(validate_title_slug("-two-sum").is_err());
+    }
+
+    #[test]
+    fn playground_ids_are_bounded_and_path_safe() {
+        assert!(validate_playground_uuid("4KK3DMtw").is_ok());
+        assert!(validate_playground_uuid("answer-1_shared").is_ok());
+        assert!(validate_playground_uuid("").is_err());
+        assert!(validate_playground_uuid("../shared").is_err());
+        assert!(validate_playground_uuid("answer?lang=cpp").is_err());
+        assert!(validate_playground_uuid(&"a".repeat(65)).is_err());
     }
 
     #[test]

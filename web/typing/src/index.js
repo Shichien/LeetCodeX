@@ -58,6 +58,16 @@ const LANGUAGE_OPTIONS = [
   { value: "csharp", label: "C#" },
   { value: "php", label: "PHP" },
 ];
+const PRACTICE_LANGUAGE_LABELS = {
+  c: "C",
+  cpp: "C++",
+  golang: "Go",
+  kotlin: "Kotlin",
+  python3: "Python 3",
+  ruby: "Ruby",
+  scala: "Scala",
+  swift: "Swift",
+};
 
 const previous = window[GLOBAL_KEY];
 if (previous?.version === VERSION) {
@@ -88,6 +98,7 @@ function install() {
     favorites: initialFavorites,
     daily: initialDaily,
     draftSnippet: null,
+    settingsBeforeOverride: null,
     promptIndex: -1,
     lastTarget: null,
     lastSession: null,
@@ -309,18 +320,29 @@ function install() {
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
-  function activate() {
+  function activate(practiceOverride = null) {
     if (window.__LEETCODEX__?.active) window.__LEETCODEX__.toggle();
     const editor = findMainComposer();
     if (!editor) return false;
     const snapshot = captureEditor(editor);
     try {
-      const draftSnippet = practiceableDraft(snapshot.text);
+      const overrideSnippet = practiceableDraft(practiceOverride?.text);
+      const draftSnippet = overrideSnippet ?? practiceableDraft(snapshot.text);
       state.active = true;
       state.editor = editor;
       state.surface = findComposerSurface(editor);
       state.snapshot = snapshot;
       state.draftSnippet = draftSnippet;
+      if (overrideSnippet) {
+        state.settingsBeforeOverride = { ...state.settings };
+        state.settings = {
+          ...state.settings,
+          presetId: "quote",
+          language: normalizePracticeLanguage(practiceOverride?.language),
+          category: "draft",
+          topic: "all",
+        };
+      }
       if (state.settings.category === "draft" && !state.draftSnippet) {
         state.settings = { ...state.settings, category: "mix", topic: "all" };
         saveSettings(state.settings);
@@ -373,6 +395,11 @@ function install() {
     state.surface = null;
     state.snapshot = null;
     state.draftSnippet = null;
+    if (state.settingsBeforeOverride) {
+      state.settings = state.settingsBeforeOverride;
+      state.settingsBeforeOverride = null;
+      saveSettings(state.settings);
+    }
     state.surfaceStyles = null;
     state.editorStyles = null;
     state.surfaceBaseHeight = 0;
@@ -886,7 +913,14 @@ function install() {
       button.dataset.active = String(button.dataset.preset === state.settings.presetId);
     }
     const language = state.hud.querySelector("[data-setting='language']");
-    if (language instanceof HTMLSelectElement && language.value !== state.settings.language) {
+    if (language instanceof HTMLSelectElement) {
+      let current = language.querySelector(`option[value='${CSS.escape(state.settings.language)}']`);
+      if (!current && state.settingsBeforeOverride) {
+        current = document.createElement("option");
+        current.value = state.settings.language;
+        current.textContent = PRACTICE_LANGUAGE_LABELS[state.settings.language] ?? state.settings.language;
+        language.appendChild(current);
+      }
       language.value = state.settings.language;
     }
     const progress = state.session.pausedAt !== null
@@ -1155,9 +1189,20 @@ function install() {
       return state.active;
     },
     toggle: () => (state.active ? deactivate() : activate()),
+    practice: (source) => {
+      const text = practiceableDraft(source?.text);
+      if (!text) return false;
+      if (state.active) deactivate();
+      return activate({ text, language: source?.language });
+    },
     ensure: ensureAttached,
     destroy,
   };
+}
+
+function normalizePracticeLanguage(value) {
+  const language = String(value ?? "").toLowerCase();
+  return /^[a-z0-9_+#.-]{1,32}$/.test(language) ? language : "typescript";
 }
 
 function defaultSettings() {

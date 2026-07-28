@@ -79,12 +79,15 @@ Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式，按 `Ctrl+Alt+T` �
 - `Ctrl+Alt+L`：进入或退出 Leetcodex，并恢复原 Codex 草稿。
 - `Ctrl+Alt+T`：进入或退出 CotypeX Typing 模式，并恢复原 Codex 草稿。
 - 面板中的 `Typing` / `LeetCode`：不退出练习区，直接在两种模式之间切换。
+- `Answer`：读取当前在线题目的官方 Editorial，选择 Approach 和官方实现语言后进入临时跟打模式；Premium 权限仍由所选 LeetCode 站点决定。
 - `Ctrl+Enter` 或 `Command+Enter`：运行公开样例。
 - `Ctrl+F` 或 `Command+F`：打开编辑器右上角查找与替换。
 - `Ctrl+S` 或 `Command+S`：立即保存当前草稿。
 - `Esc`：关闭查找框；Vim 模式下返回 NORMAL，不会退出 Leetcodex。
 - `Run`：在线题调用 LeetCode 官方运行接口；离线 JavaScript 题在隔离 Worker 中执行。
 - `Submit`：在线题提交到官方 judge；离线 JavaScript 题运行全部本地测试。
+
+官方答案跟打只读取 `leetcode.com` 或 `leetcode.cn` 返回的 Editorial 与官方 playground 代码，不使用第三方题解，也不会自动运行或提交答案。退出跟打后会恢复原 Codex 草稿和 CotypeX 设置。
 
 面板中的 Vim 开关会持久保存。题目、站点和语言分别使用独立草稿，切换或关闭页面不会丢失代码。启动器还会把草稿原子备份到 `~/.leetcodex/drafts/v1/`；中断的文件替换会在下次访问时自动恢复，Codex WebView 本地数据被清理后也会从这份原生备份恢复。原生草稿读写会逐级验证受控目录，在任何父级为符号链接或 Windows reparse point 时拒绝操作，避免备份路径被重定向到用户目录之外。
 

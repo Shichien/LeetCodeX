@@ -8,7 +8,7 @@ Leetcodex 把 LeetCode 刷题、CotypeX 代码打字、代码编辑和测试结�
 2. 双击 `Start Leetcodex.command`，或运行 `./leetcodex run`。启动失败时双击脚本会保留窗口和原始退出码，便于读取错误。
 3. Codex 打开后按 `Control+Option+L` 进入 LeetCode 模式，或按 `Control+Option+T` 进入 Typing 模式。
 
-刷题状态中，`Command+Enter` 运行公开样例，`Command+F` 查找代码。`Esc` 关闭查找框或在 Vim 模式下返回 NORMAL。两种模式的紧凑切换按钮可直接互相切换；再次按当前模式的快捷键会退出并恢复原 Codex 草稿。
+刷题状态中，`Command+Enter` 运行公开样例，`Command+F` 查找代码。在线题目的 `Answer` 可读取官方 Editorial，选择 Approach 和语言后进入 CotypeX 跟打。`Esc` 关闭查找框或在 Vim 模式下返回 NORMAL。两种模式的紧凑切换按钮可直接互相切换；再次按当前模式的快捷键会退出并恢复原 Codex 草稿。
 
 也可以显式指定应用：
 

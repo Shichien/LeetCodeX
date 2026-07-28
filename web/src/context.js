@@ -258,6 +258,15 @@ export function controlAvailability(state, role, siteLabel = "LeetCode") {
   if (state.loadingQuestion && ["language", "run", "submit", "reset"].includes(role)) {
     return { disabled: true, reason: "Wait for the official problem to finish loading" };
   }
+  if (role === "answer") {
+    if (state.answerLoading) return { disabled: true, reason: "Wait for the official solution to load" };
+    if (state.bridgeAvailable === false) {
+      return { disabled: true, reason: "Start the Leetcodex launcher to load official solutions" };
+    }
+    if (!state.online || !state.remoteQuestion) {
+      return { disabled: true, reason: `Select a connected problem from ${siteLabel}` };
+    }
+  }
   if (role === "login" && state.bridgeAvailable === false) {
     return { disabled: true, reason: "Start the Leetcodex launcher to log in" };
   }

@@ -93,6 +93,7 @@ const TOPICS = [
   ["segment-tree", "Segment tree"],
 ];
 const MAX_SEARCH_CHARS = 200;
+const MAX_EDITORIAL_PLAYGROUNDS = 10;
 const SUBMISSION_LANGUAGES = [
   ["c", "C"],
   ["cpp", "C++"],
@@ -165,6 +166,9 @@ function install({ resumeActive = false } = {}) {
     editorDraftContext: null,
     applyingCode: false,
     problemExpanded: false,
+    answerGeneration: 0,
+    answerLoading: false,
+    answerSources: [],
     controlTitles: new WeakMap(),
   };
 
@@ -321,6 +325,7 @@ function install({ resumeActive = false } = {}) {
     state.siteGeneration += 1;
     state.loginGeneration += 1;
     state.runGeneration += 1;
+    state.answerGeneration += 1;
     window.clearTimeout(state.ensureTimer);
     window.clearTimeout(state.searchTimer);
     window.clearTimeout(state.loginTimer);
@@ -333,6 +338,8 @@ function install({ resumeActive = false } = {}) {
     state.online = false;
     state.remoteProblems = [];
     state.remoteQuestion = null;
+    state.answerLoading = false;
+    state.answerSources = [];
   }
 
   function teardownMountedComposer(restoreOriginal) {
@@ -416,11 +423,19 @@ function install({ resumeActive = false } = {}) {
           <span>Vim</span>
         </label>
         <div class="leetcodex-actions">
+          <button type="button" data-action="answer" title="Practice an official solution">Answer</button>
           <button type="button" data-action="reset">Reset</button>
           <button type="button" data-action="run">Run</button>
           <button type="button" data-action="submit" class="leetcodex-primary">Submit</button>
           <button type="button" data-action="next">Next</button>
         </div>
+      </div>
+      <div class="leetcodex-answer-picker" data-field="answer-picker" hidden>
+        <strong>Official answer</strong>
+        <select class="leetcodex-select" data-answer="approach" aria-label="Official solution approach"></select>
+        <select class="leetcodex-select" data-answer="language" aria-label="Official solution language"></select>
+        <button type="button" data-action="answer-start">Type</button>
+        <button type="button" class="leetcodex-answer-close" data-action="answer-close" aria-label="Close official answer picker" title="Close">&times;</button>
       </div>
       <div class="leetcodex-problem">
         <div class="leetcodex-heading">
@@ -476,6 +491,18 @@ function install({ resumeActive = false } = {}) {
       toggleProblemDetails();
       return;
     }
+    if (action === "answer") {
+      void loadOfficialAnswers();
+      return;
+    }
+    if (action === "answer-close") {
+      closeAnswerPicker();
+      return;
+    }
+    if (action === "answer-start") {
+      startAnswerPractice();
+      return;
+    }
     if (state.running) {
       if (action === "run" && state.runningKind === "run") cancelRun();
       return;
@@ -510,6 +537,11 @@ function install({ resumeActive = false } = {}) {
       return;
     }
     if (!(event.target instanceof HTMLSelectElement)) return;
+    if (event.target.dataset.answer === "approach") {
+      syncAnswerLanguageOptions();
+      return;
+    }
+    if (event.target.dataset.answer === "language") return;
     if (event.target.dataset.setting === "site") {
       saveCurrentDraft();
       state.questionLoadGeneration += 1;
@@ -522,6 +554,7 @@ function install({ resumeActive = false } = {}) {
       state.settings.problemSlug = "";
       state.remoteProblems = [];
       state.remoteQuestion = null;
+      resetAnswerPicker();
       state.account = null;
       state.online = false;
       saveSettings(state.settings);
@@ -639,6 +672,7 @@ function install({ resumeActive = false } = {}) {
       state.questionLoadGeneration += 1;
       setQuestionLoading(false);
       state.remoteQuestion = null;
+      resetAnswerPicker();
       const presentation = connectionFailurePresentation(
         state.bridgeAvailable,
         error instanceof Error ? error.message : String(error),
@@ -762,6 +796,7 @@ function install({ resumeActive = false } = {}) {
       setQuestionLoading(false);
       state.remoteProblems = [];
       state.remoteQuestion = null;
+      resetAnswerPicker();
       rebuildProblemOptions();
       loadProblem(activeProblem(), true);
       const retrying = scheduleSiteReconnect();
@@ -858,6 +893,7 @@ function install({ resumeActive = false } = {}) {
     saveCurrentDraft();
     const generation = ++state.questionLoadGeneration;
     const site = state.settings.site;
+    resetAnswerPicker();
     state.remoteQuestion = null;
     setQuestionLoading(true);
     setResult("Loading official problem...", "running");
@@ -885,6 +921,131 @@ function install({ resumeActive = false } = {}) {
     } finally {
       if (generation === state.questionLoadGeneration) setQuestionLoading(false);
     }
+  }
+
+  async function loadOfficialAnswers() {
+    const question = state.remoteQuestion;
+    if (!question || !state.online || !state.bridgeAvailable || state.answerLoading) {
+      setResult("Select a connected official problem before opening its answer", "error");
+      return;
+    }
+    const generation = ++state.answerGeneration;
+    const site = state.settings.site;
+    const titleSlug = question.titleSlug;
+    state.answerLoading = true;
+    updateControlDisabledState();
+    setResult("Loading official solution...", "running");
+    try {
+      const payload = await bridgeRequest("/api/solution", { site, titleSlug });
+      if (!isCurrentAnswerRequest(generation, site, titleSlug)) return;
+      const solution = payload?.data?.question?.solution;
+      if (!solution) {
+        throw new Error(question.isPaidOnly
+          ? "This official solution requires LeetCode Premium"
+          : "LeetCode has no official solution for this problem");
+      }
+      if (solution.canSeeDetail === false) {
+        throw new Error(question.isPaidOnly
+          ? "This official solution requires LeetCode Premium"
+          : "This account cannot access the official solution");
+      }
+      const sources = extractInlineOfficialSources(solution.content);
+      const references = extractOfficialPlaygrounds(solution.content, site).slice(0, MAX_EDITORIAL_PLAYGROUNDS);
+      for (const reference of references) {
+        const playground = await bridgeRequest("/api/playground", { site, uuid: reference.uuid });
+        if (!isCurrentAnswerRequest(generation, site, titleSlug)) return;
+        const codes = playground?.data?.allPlaygroundCodes;
+        if (!Array.isArray(codes)) continue;
+        for (const code of codes) {
+          if (!practiceableOfficialCode(code?.code, code?.langSlug)) continue;
+          sources.push({
+            approach: reference.approach,
+            approachLabel: reference.label,
+            language: code.langSlug,
+            code: code.code,
+          });
+        }
+      }
+      state.answerSources = deduplicateOfficialSources(sources);
+      if (state.answerSources.length === 0) {
+        throw new Error("The official solution does not expose a typeable code implementation");
+      }
+      renderAnswerPicker();
+      setResult(`${state.answerSources.length} official implementations ready`, "idle");
+    } catch (error) {
+      if (isCurrentAnswerRequest(generation, site, titleSlug)) {
+        state.answerSources = [];
+        closeAnswerPicker();
+        setResult(error instanceof Error ? error.message : String(error), "error");
+      }
+    } finally {
+      if (generation === state.answerGeneration) {
+        state.answerLoading = false;
+        updateControlDisabledState();
+      }
+    }
+  }
+
+  function isCurrentAnswerRequest(generation, site, titleSlug) {
+    return state.active
+      && generation === state.answerGeneration
+      && site === state.settings.site
+      && titleSlug === state.remoteQuestion?.titleSlug;
+  }
+
+  function renderAnswerPicker() {
+    const picker = state.panel?.querySelector("[data-field='answer-picker']");
+    const approach = picker?.querySelector("[data-answer='approach']");
+    if (!(picker instanceof HTMLElement) || !(approach instanceof HTMLSelectElement)) return;
+    const entries = uniqueOfficialApproaches(state.answerSources);
+    approach.replaceChildren(...entries.map(({ value, label }) => optionNode(value, label)));
+    picker.hidden = false;
+    syncAnswerLanguageOptions();
+  }
+
+  function syncAnswerLanguageOptions() {
+    const picker = state.panel?.querySelector("[data-field='answer-picker']");
+    const approach = picker?.querySelector("[data-answer='approach']");
+    const language = picker?.querySelector("[data-answer='language']");
+    if (!(approach instanceof HTMLSelectElement) || !(language instanceof HTMLSelectElement)) return;
+    const sources = state.answerSources.filter((source) => source.approach === approach.value);
+    language.replaceChildren(...sources.map((source) => optionNode(
+      source.language,
+      officialLanguageLabel(source.language),
+    )));
+    const preferred = sources.find((source) => source.language === state.settings.language)
+      ?? sources.find((source) => normalizeTypingLanguage(source.language) === normalizeTypingLanguage(state.settings.language))
+      ?? sources[0];
+    if (preferred) language.value = preferred.language;
+  }
+
+  function startAnswerPractice() {
+    const picker = state.panel?.querySelector("[data-field='answer-picker']");
+    const approach = picker?.querySelector("[data-answer='approach']");
+    const language = picker?.querySelector("[data-answer='language']");
+    if (!(approach instanceof HTMLSelectElement) || !(language instanceof HTMLSelectElement)) return;
+    const source = state.answerSources.find((item) => (
+      item.approach === approach.value && item.language === language.value
+    ));
+    if (!source || typeof window.__COTYPEX__?.practice !== "function") {
+      setResult("Typing practice is unavailable; restart the Leetcodex launcher", "error");
+      return;
+    }
+    const practice = window.__COTYPEX__.practice;
+    deactivate();
+    practice({ text: source.code, language: normalizeTypingLanguage(source.language) });
+  }
+
+  function closeAnswerPicker() {
+    const picker = state.panel?.querySelector("[data-field='answer-picker']");
+    if (picker instanceof HTMLElement) picker.hidden = true;
+  }
+
+  function resetAnswerPicker() {
+    state.answerGeneration += 1;
+    state.answerLoading = false;
+    state.answerSources = [];
+    closeAnswerPicker();
   }
 
   function isCurrentQuestionLoad(generation, site, titleSlug) {
@@ -1221,6 +1382,7 @@ function install({ resumeActive = false } = {}) {
   function loadProblem(problem, resetCode) {
     if (!problem) return;
     state.remoteQuestion = null;
+    resetAnswerPicker();
     state.settings.problemId = problem.id;
     if (!SUBMISSION_LANGUAGES.some(([value]) => value === state.settings.language)) {
       state.settings.language = "javascript";
@@ -1861,6 +2023,120 @@ function bridgeRequest(
 function htmlToText(value) {
   const documentValue = new DOMParser().parseFromString(String(value ?? ""), "text/html");
   return normalizeProblemText(serializeProblemNode(documentValue.body));
+}
+
+function extractOfficialPlaygrounds(content, site) {
+  const documentValue = new DOMParser().parseFromString(String(content ?? ""), "text/html");
+  const allowedHosts = new Set(["leetcode.com", "www.leetcode.com", "leetcode.cn", "www.leetcode.cn"]);
+  const origin = site === "china" ? "https://leetcode.cn" : "https://leetcode.com";
+  const seen = new Set();
+  const references = [];
+  for (const iframe of documentValue.querySelectorAll("iframe[src]")) {
+    let url;
+    try {
+      url = new URL(iframe.getAttribute("src"), origin);
+    } catch {
+      continue;
+    }
+    if (!allowedHosts.has(url.hostname)) continue;
+    const match = url.pathname.match(/^\/playground\/([A-Za-z0-9_-]{1,64})\/shared\/?$/);
+    if (!match || seen.has(match[1])) continue;
+    seen.add(match[1]);
+    const index = references.length + 1;
+    references.push({ uuid: match[1], approach: `official-${index}`, label: `Approach ${index}` });
+  }
+  return references;
+}
+
+function extractInlineOfficialSources(content) {
+  const value = String(content ?? "");
+  const sources = [];
+  const documentValue = new DOMParser().parseFromString(value, "text/html");
+  for (const code of documentValue.querySelectorAll("pre code")) {
+    const language = code.className.match(/(?:^|\s)language-([A-Za-z0-9_+#.-]+)/)?.[1] ?? "text";
+    if (!practiceableOfficialCode(code.textContent, language)) continue;
+    const index = sources.length + 1;
+    sources.push({
+      approach: `inline-${index}`,
+      approachLabel: `Implementation ${index}`,
+      language: normalizeEditorialLanguage(language),
+      code: code.textContent,
+    });
+  }
+  for (const match of value.matchAll(/```([A-Za-z0-9_+#.-]*)[^\S\r\n]*\r?\n([\s\S]*?)```/g)) {
+    const language = normalizeEditorialLanguage(match[1] || "text");
+    if (!practiceableOfficialCode(match[2], language)) continue;
+    const index = sources.length + 1;
+    sources.push({
+      approach: `inline-${index}`,
+      approachLabel: `Implementation ${index}`,
+      language,
+      code: match[2].replace(/\s+$/, ""),
+    });
+  }
+  return sources;
+}
+
+function practiceableOfficialCode(code, language) {
+  return typeof code === "string"
+    && code.trim().length > 0
+    && code.length <= 500_000
+    && typeof language === "string"
+    && /^[A-Za-z0-9_+#.-]{1,32}$/.test(language);
+}
+
+function deduplicateOfficialSources(sources) {
+  const seen = new Set();
+  return sources.filter((source) => {
+    if (!practiceableOfficialCode(source.code, source.language)) return false;
+    const key = `${source.approach}\u0000${source.language}\u0000${source.code}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function uniqueOfficialApproaches(sources) {
+  const seen = new Set();
+  const entries = [];
+  for (const source of sources) {
+    if (seen.has(source.approach)) continue;
+    seen.add(source.approach);
+    entries.push({ value: source.approach, label: source.approachLabel });
+  }
+  return entries;
+}
+
+function normalizeEditorialLanguage(value) {
+  const language = String(value ?? "").toLowerCase();
+  const aliases = {
+    "c++": "cpp",
+    "c#": "csharp",
+    cs: "csharp",
+    go: "golang",
+    js: "javascript",
+    py: "python3",
+    python: "python3",
+    ts: "typescript",
+  };
+  return aliases[language] ?? language;
+}
+
+function normalizeTypingLanguage(value) {
+  const language = normalizeEditorialLanguage(value);
+  return /^[a-z0-9_+#.-]{1,32}$/.test(language) ? language : "typescript";
+}
+
+function officialLanguageLabel(value) {
+  const language = normalizeEditorialLanguage(value);
+  return SUBMISSION_LANGUAGES.find(([slug]) => slug === language)?.[1] ?? language;
+}
+
+function optionNode(value, label) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  return option;
 }
 
 function delay(milliseconds) {

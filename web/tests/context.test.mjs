@@ -440,6 +440,23 @@ test("disabled controls expose the state-specific reason", () => {
     disabled: false,
     reason: "",
   });
+  assert.deepEqual(controlAvailability({ ...ready, answerLoading: true }, "answer", "leetcode.cn"), {
+    disabled: true,
+    reason: "Wait for the official solution to load",
+  });
+  assert.deepEqual(controlAvailability({ ...ready, answerLoading: false, remoteQuestion: null }, "answer", "leetcode.cn"), {
+    disabled: true,
+    reason: "Select a connected problem from leetcode.cn",
+  });
+  assert.deepEqual(controlAvailability({
+    ...ready,
+    answerLoading: false,
+    bridgeAvailable: true,
+    remoteQuestion: { titleSlug: "two-sum" },
+  }, "answer", "leetcode.cn"), {
+    disabled: false,
+    reason: "",
+  });
 });
 
 test("offline controls disable actions that require the native bridge", () => {

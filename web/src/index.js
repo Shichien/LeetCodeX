@@ -1,6 +1,7 @@
 import { APP_VERSION, CSS_TEXT, PROBLEMS } from "virtual:leetcodex-assets";
 import {
   advanceProblemPageOffset,
+  bridgePendingSnapshot,
   canUpdateBackgroundResult,
   connectionFailurePresentation,
   controlAvailability,
@@ -1413,6 +1414,7 @@ function install({ resumeActive = false } = {}) {
     toggle: () => state.active ? deactivate() : activate(),
     handleEscape: handlePracticeEscape,
     ensure: ensureAttached,
+    diagnostic: () => bridgePendingSnapshot(bridgeState.pending.values()),
     destroy,
   };
 
@@ -1766,6 +1768,8 @@ function bridgeRequest(
   const effectiveTimeout = Number.isFinite(timeoutMs)
     ? Math.max(1, Math.min(BRIDGE_TIMEOUT_MS, timeoutMs))
     : BRIDGE_TIMEOUT_MS;
+  const startedAt = Date.now();
+  const deadlineAt = startedAt + effectiveTimeout;
   return new Promise((resolve, reject) => {
     let settled = false;
     const cleanup = () => {
@@ -1783,7 +1787,7 @@ function bridgeRequest(
       cleanup();
       reject(new Error("Account bridge timed out"));
     }, effectiveTimeout);
-    bridgeState.pending.set(id, { resolve, reject, cleanup });
+    bridgeState.pending.set(id, { resolve, reject, cleanup, startedAt, deadlineAt });
     signal?.addEventListener("abort", abort, { once: true });
     try {
       window.leetcodexBridge(payload);

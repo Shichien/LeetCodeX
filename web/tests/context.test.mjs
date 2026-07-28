@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   advanceProblemPageOffset,
+  bridgePendingSnapshot,
   canUpdateBackgroundResult,
   connectionFailurePresentation,
   controlAvailability,
@@ -26,6 +27,41 @@ import {
   storeRemoteCatalog,
 } from "../src/context.js";
 import { buildWorkerSource } from "../src/runner.js";
+
+test("bridge diagnostics distinguish live requests from stalled timers", () => {
+  assert.deepEqual(bridgePendingSnapshot([], 10_000), {
+    pendingBridge: 0,
+    pendingBridgeOldestMs: null,
+    staleBridge: 0,
+  });
+  assert.deepEqual(bridgePendingSnapshot([
+    { startedAt: 8_000, deadlineAt: 12_000 },
+    { startedAt: 9_500, deadlineAt: 10_500 },
+  ], 10_000), {
+    pendingBridge: 2,
+    pendingBridgeOldestMs: 2_000,
+    staleBridge: 0,
+  });
+  assert.equal(bridgePendingSnapshot([
+    { startedAt: 1_000, deadlineAt: 8_000 },
+  ], 10_000).staleBridge, 0);
+  assert.equal(bridgePendingSnapshot([
+    { startedAt: 1_000, deadlineAt: 7_999 },
+  ], 10_000).staleBridge, 1);
+});
+
+test("bridge diagnostics ignore malformed timing metadata without hiding queue size", () => {
+  assert.deepEqual(bridgePendingSnapshot([
+    {},
+    { startedAt: Number.NaN, deadlineAt: 1 },
+    { startedAt: 11_000, deadlineAt: 12_000 },
+    { startedAt: 9_000, deadlineAt: 8_000 },
+  ], 10_000), {
+    pendingBridge: 4,
+    pendingBridgeOldestMs: 1_000,
+    staleBridge: 0,
+  });
+});
 
 test("composer reattach retries quickly and cap at one second", () => {
   assert.equal(composerReattachDelay(1), 200);

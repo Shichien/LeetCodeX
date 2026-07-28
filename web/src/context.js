@@ -53,6 +53,34 @@ export function canUseOfficialJudge(account) {
   return account?.isSignedIn === true;
 }
 
+export function bridgePendingSnapshot(pending, now = Date.now(), graceMs = 2_000) {
+  const entries = Array.from(pending ?? []);
+  const currentTime = Number.isFinite(now) ? now : Date.now();
+  const grace = Number.isFinite(graceMs) ? Math.max(0, graceMs) : 2_000;
+  let pendingBridgeOldestMs = null;
+  let staleBridge = 0;
+
+  for (const entry of entries) {
+    const startedAt = entry?.startedAt;
+    const deadlineAt = entry?.deadlineAt;
+    if (!Number.isFinite(startedAt) || startedAt < 0 || startedAt > currentTime) continue;
+
+    const age = currentTime - startedAt;
+    pendingBridgeOldestMs = Math.max(pendingBridgeOldestMs ?? 0, age);
+    if (Number.isFinite(deadlineAt)
+      && deadlineAt >= startedAt
+      && currentTime > deadlineAt + grace) {
+      staleBridge += 1;
+    }
+  }
+
+  return {
+    pendingBridge: entries.length,
+    pendingBridgeOldestMs,
+    staleBridge,
+  };
+}
+
 export function connectionFailurePresentation(bridgeAvailable, errorMessage = "") {
   if (!bridgeAvailable) {
     return {

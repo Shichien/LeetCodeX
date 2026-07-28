@@ -620,14 +620,20 @@ fn evaluate_renderer_state(target: &TargetInfo, port: u16) -> Result<Value> {
             "params": {
                 "expression": r#"(() => {
                   const api = window.__LEETCODEX__;
-                  const bridge = window.__LEETCODEX_BRIDGE_STATE__;
+                  const diagnostic = typeof api?.diagnostic === 'function' ? api.diagnostic() : null;
                   return {
                     injected: typeof api?.ensure === 'function' && typeof api?.destroy === 'function',
                     version: typeof api?.version === 'string' ? api.version : null,
                     active: api?.active === true,
                     panelCount: document.querySelectorAll('.leetcodex-panel').length,
                     editorCount: document.querySelectorAll('.cm-editor').length,
-                    pendingBridge: Number.isSafeInteger(bridge?.pending?.size) ? bridge.pending.size : null
+                    pendingBridge: Number.isSafeInteger(diagnostic?.pendingBridge) ? diagnostic.pendingBridge : null,
+                    pendingBridgeOldestMs: Number.isSafeInteger(diagnostic?.pendingBridgeOldestMs)
+                      ? diagnostic.pendingBridgeOldestMs
+                      : null,
+                    staleBridge: Number.isSafeInteger(diagnostic?.staleBridge)
+                      ? diagnostic.staleBridge
+                      : null
                   };
                 })()"#,
                 "returnByValue": true
@@ -671,11 +677,31 @@ fn classify_renderer_state(target_id: &str, value: Value, expected_version: &str
         .and_then(Value::as_u64)
         .unwrap_or(0);
     let pending_bridge = value.get("pendingBridge").and_then(Value::as_u64);
+    let pending_bridge_oldest_ms = value.get("pendingBridgeOldestMs").and_then(Value::as_u64);
+    let pending_bridge_oldest_is_null = value
+        .get("pendingBridgeOldestMs")
+        .is_some_and(Value::is_null);
+    let stale_bridge = value.get("staleBridge").and_then(Value::as_u64);
+    let bridge_diagnostic_valid =
+        pending_bridge
+            .zip(stale_bridge)
+            .is_some_and(|(pending, stale)| {
+                stale <= pending
+                    && if pending == 0 {
+                        pending_bridge_oldest_is_null
+                    } else {
+                        pending_bridge_oldest_ms.is_some()
+                    }
+            });
     let status = if !injected {
         "not_injected"
     } else if version != Some(expected_version) {
         "version_mismatch"
-    } else if active && panel_count == 1 && editor_count == 1 && pending_bridge.is_some() {
+    } else if !bridge_diagnostic_valid {
+        "degraded"
+    } else if stale_bridge.is_some_and(|count| count > 0) {
+        "bridge_stalled"
+    } else if active && panel_count == 1 && editor_count == 1 {
         "active"
     } else if !active && panel_count == 0 && editor_count == 0 {
         "inactive"
@@ -690,6 +716,8 @@ fn classify_renderer_state(target_id: &str, value: Value, expected_version: &str
         "panelCount": panel_count,
         "editorCount": editor_count,
         "pendingBridge": pending_bridge,
+        "pendingBridgeOldestMs": pending_bridge_oldest_ms,
+        "staleBridge": stale_bridge,
     })
 }
 
@@ -697,7 +725,7 @@ fn renderer_report(targets: Vec<Value>) -> Value {
     let has_problem = targets.iter().any(|target| {
         matches!(
             target.get("status").and_then(Value::as_str),
-            Some("error" | "version_mismatch" | "degraded")
+            Some("error" | "version_mismatch" | "degraded" | "bridge_stalled")
         )
     });
     let status = if has_problem {
@@ -846,6 +874,8 @@ mod tests {
                 "panelCount": 1,
                 "editorCount": 1,
                 "pendingBridge": 0,
+                "pendingBridgeOldestMs": null,
+                "staleBridge": 0,
             }),
             "0.2.47",
         );
@@ -861,6 +891,8 @@ mod tests {
                 "panelCount": 2,
                 "editorCount": 1,
                 "pendingBridge": 0,
+                "pendingBridgeOldestMs": null,
+                "staleBridge": 0,
             }),
             "0.2.47",
         );
@@ -875,10 +907,58 @@ mod tests {
                 "panelCount": 1,
                 "editorCount": 1,
                 "pendingBridge": 0,
+                "pendingBridgeOldestMs": null,
+                "staleBridge": 0,
             }),
             "0.2.47",
         );
         assert_eq!(mismatch["status"], "version_mismatch");
+
+        let pending = classify_renderer_state(
+            "page-1",
+            json!({
+                "injected": true,
+                "version": "0.2.47",
+                "active": true,
+                "panelCount": 1,
+                "editorCount": 1,
+                "pendingBridge": 1,
+                "pendingBridgeOldestMs": 500,
+                "staleBridge": 0,
+            }),
+            "0.2.47",
+        );
+        assert_eq!(pending["status"], "active");
+
+        let stalled = classify_renderer_state(
+            "page-1",
+            json!({
+                "injected": true,
+                "version": "0.2.47",
+                "active": true,
+                "panelCount": 1,
+                "editorCount": 1,
+                "pendingBridge": 1,
+                "pendingBridgeOldestMs": 22_001,
+                "staleBridge": 1,
+            }),
+            "0.2.47",
+        );
+        assert_eq!(stalled["status"], "bridge_stalled");
+
+        let legacy = classify_renderer_state(
+            "page-1",
+            json!({
+                "injected": true,
+                "version": "0.2.47",
+                "active": true,
+                "panelCount": 1,
+                "editorCount": 1,
+                "pendingBridge": 0,
+            }),
+            "0.2.47",
+        );
+        assert_eq!(legacy["status"], "degraded");
     }
 
     #[test]
@@ -897,6 +977,12 @@ mod tests {
             "degraded"
         );
         assert_eq!(renderer_report(Vec::new())["status"], "not_injected");
+        assert_eq!(
+            renderer_report(vec![
+                json!({ "targetId": "page-1", "status": "bridge_stalled" })
+            ])["status"],
+            "degraded"
+        );
     }
 
     #[test]

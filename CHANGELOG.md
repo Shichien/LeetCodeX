@@ -2,6 +2,14 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.58] - 2026-07-28
+
+### Fixed
+
+- Bridge requests now retain only bounded timing metadata so renderer diagnostics can distinguish ordinary in-flight work from requests left behind after Chromium suspends a timeout callback.
+- Renderer health reports the oldest pending request age and stale request count without exposing request paths, bodies, responses, or editor contents.
+- Requests beyond their deadline receive a two-second scheduling grace period before reporting `bridge_stalled`; incomplete legacy diagnostics are degraded instead of being accepted as healthy.
+
 ## [0.2.57] - 2026-07-28
 
 ### Fixed

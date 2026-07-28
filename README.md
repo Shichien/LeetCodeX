@@ -50,7 +50,7 @@ Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式。
 ./target/release/leetcodex doctor --strict --json
 ```
 
-报告会包含顶层 `healthy`、Leetcodex 版本、操作系统、Codex 安装位置、账号配对浏览器、两站独立配对会话的配置目录与动态端口、启动器单实例锁、Codex CDP 状态、只读 renderer 注入健康度和结构化 `drafts` 草稿目录状态。Launcher 诊断会拒绝链接或重解析的 runtime 目录和锁文件，并从已验证句柄读取最多 4 KiB 的锁元数据；只有 PID、端口和版本结构完整且与本次诊断一致时状态才是 `active`，畸形或端口错误为 `invalid_metadata`，旧版 launcher 为 `version_mismatch`。草稿诊断只读取路径类型、可读性和 Unix 隐私权限，不创建或修改文件；Renderer 诊断只读取 Leetcodex 版本、active、面板/编辑器数量与 Bridge 队列长度，不读取对话或草稿内容。`--strict` 会在 Codex、账号浏览器、launcher、CDP、renderer 或草稿目录不安全/不可用时返回非零退出码；LeetCode 是否已登录不影响健康结论。旧版 `draftDirectory` 路径字段继续保留。提交问题时建议附上 `--json` 输出，但不要附带草稿文件内容。
+报告会包含顶层 `healthy`、Leetcodex 版本、操作系统、Codex 安装位置、账号配对浏览器、两站独立配对会话的配置目录与动态端口、启动器单实例锁、Codex CDP 状态、只读 renderer 注入健康度和结构化 `drafts` 草稿目录状态。Launcher 诊断会拒绝链接或重解析的 runtime 目录和锁文件，并从已验证句柄读取最多 4 KiB 的锁元数据；只有 PID、端口和版本结构完整且与本次诊断一致时状态才是 `active`，畸形或端口错误为 `invalid_metadata`，旧版 launcher 为 `version_mismatch`。草稿诊断只读取路径类型、可读性和 Unix 隐私权限，不创建或修改文件；Renderer 诊断只读取 Leetcodex 版本、active、面板/编辑器数量、Bridge 队列长度、最老请求年龄和过期数量，不读取请求内容、对话或草稿内容。超过截止时间与两秒调度宽限的请求会报告 `bridge_stalled`。`--strict` 会在 Codex、账号浏览器、launcher、CDP、renderer 或草稿目录不安全/不可用时返回非零退出码；LeetCode 是否已登录不影响健康结论。旧版 `draftDirectory` 路径字段继续保留。提交问题时建议附上 `--json` 输出，但不要附带草稿文件内容。
 
 ### 重置账号配对
 

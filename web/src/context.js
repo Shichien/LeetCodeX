@@ -34,6 +34,11 @@ export function normalizePersistedSettings(saved, defaults, localProblemIds, max
   const search = typeof source.search === "string"
     ? Array.from(source.search).slice(0, maxSearchChars).join("")
     : defaults.search;
+  const topic = typeof source.topic === "string"
+    && (source.topic === "" || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(source.topic))
+    && source.topic.length <= 80
+    ? source.topic
+    : defaults.topic;
   return {
     site: ["global", "china"].includes(source.site) ? source.site : defaults.site,
     difficulty: ["all", "easy", "medium", "hard"].includes(source.difficulty)
@@ -46,6 +51,7 @@ export function normalizePersistedSettings(saved, defaults, localProblemIds, max
     language,
     vimMode: source.vimMode === true,
     search,
+    topic,
   };
 }
 
@@ -195,6 +201,7 @@ function remoteCatalogCacheKey(criteria) {
     criteria?.site ?? "",
     criteria?.difficulty ?? "",
     criteria?.search ?? "",
+    criteria?.topic ?? "",
   ]);
 }
 

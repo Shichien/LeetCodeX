@@ -19,6 +19,7 @@ const SOCKET_TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_CODE_BYTES: usize = 1_000_000;
 const MAX_DATA_INPUT_BYTES: usize = 1_000_000;
 const MAX_SEARCH_CHARS: usize = 200;
+const MAX_TOPIC_CHARS: usize = 80;
 const DEVTOOLS_ACTIVE_PORT_FILE: &str = "DevToolsActivePort";
 const SINGLETON_MARKERS: [&str; 3] = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
 
@@ -684,6 +685,18 @@ pub fn problem_list(
     limit: u64,
     difficulty: Option<&str>,
     search: Option<&str>,
+    topic: Option<&str>,
+) -> Result<Value> {
+    let variables = problem_list_variables(skip, limit, difficulty, search, topic)?;
+    graphql(site, PROBLEMS_QUERY, variables, "leetcodexProblemset")
+}
+
+fn problem_list_variables(
+    skip: u64,
+    limit: u64,
+    difficulty: Option<&str>,
+    search: Option<&str>,
+    topic: Option<&str>,
 ) -> Result<Value> {
     if skip > 100_000 {
         bail!("problem list offset is too large");
@@ -706,17 +719,31 @@ pub fn problem_list(
     if search_keyword.is_some_and(|value| value.chars().count() > MAX_SEARCH_CHARS) {
         bail!("problem search exceeds the {MAX_SEARCH_CHARS}-character limit");
     }
-    graphql(
-        site,
-        PROBLEMS_QUERY,
-        json!({
-            "skip": skip,
-            "limit": limit.clamp(1, 100),
-            "filters": filters,
-            "searchKeyword": search_keyword,
-        }),
-        "leetcodexProblemset",
-    )
+    let topic_slug = topic.map(str::trim).filter(|value| !value.is_empty());
+    if let Some(value) = topic_slug {
+        if value.len() > MAX_TOPIC_CHARS
+            || !value.chars().all(|character| {
+                character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+            })
+            || value.starts_with('-')
+            || value.ends_with('-')
+        {
+            bail!("topic contains unsupported characters");
+        }
+        filters.insert(
+            "topicFilter".into(),
+            json!({
+                "topicSlugs": [value],
+                "operator": "IS",
+            }),
+        );
+    }
+    Ok(json!({
+        "skip": skip,
+        "limit": limit.clamp(1, 100),
+        "filters": filters,
+        "searchKeyword": search_keyword,
+    }))
 }
 
 pub fn question(site: Site, title_slug: &str) -> Result<Value> {
@@ -1280,6 +1307,34 @@ mod tests {
         assert!(validate_title_slug("../submissions").is_err());
         assert!(validate_title_slug("two_sum").is_err());
         assert!(validate_title_slug("-two-sum").is_err());
+    }
+
+    #[test]
+    fn problem_filters_combine_search_difficulty_and_topic() {
+        let variables = problem_list_variables(
+            100,
+            250,
+            Some("medium"),
+            Some("  two sum  "),
+            Some("dynamic-programming"),
+        )
+        .unwrap();
+        assert_eq!(variables["skip"], 100);
+        assert_eq!(variables["limit"], 100);
+        assert_eq!(variables["searchKeyword"], "two sum");
+        assert_eq!(
+            variables["filters"]["difficultyFilter"]["difficulties"][0],
+            "MEDIUM"
+        );
+        assert_eq!(
+            variables["filters"]["topicFilter"]["topicSlugs"][0],
+            "dynamic-programming"
+        );
+        assert_eq!(variables["filters"]["topicFilter"]["operator"], "IS");
+
+        assert!(problem_list_variables(0, 50, None, None, Some("../array")).is_err());
+        assert!(problem_list_variables(0, 50, None, None, Some("Array")).is_err());
+        assert!(problem_list_variables(100_001, 50, None, None, None).is_err());
     }
 
     #[test]

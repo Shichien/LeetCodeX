@@ -46,7 +46,8 @@ fn dispatch(request: &Value) -> Result<Value> {
             let limit = body.get("limit").and_then(Value::as_u64).unwrap_or(50);
             let difficulty = body.get("difficulty").and_then(Value::as_str);
             let search = body.get("search").and_then(Value::as_str);
-            leetcode::problem_list(site, skip, limit, difficulty, search)
+            let topic = body.get("topic").and_then(Value::as_str);
+            leetcode::problem_list(site, skip, limit, difficulty, search, topic)
         }
         "/api/question" => {
             leetcode::question(site_from(body)?, required_string(body, "titleSlug")?)

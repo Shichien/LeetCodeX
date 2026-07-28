@@ -2,6 +2,18 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.60] - 2026-07-28
+
+### Added
+
+- The problem search field now explicitly supports official problem titles and frontend IDs on both LeetCode sites.
+- A compact algorithm-topic selector filters the complete paginated official catalog by popular tags such as Array, Dynamic Programming, Graph, Sliding Window, and Backtracking.
+
+### Fixed
+
+- Site, difficulty, title/ID search, and algorithm topic now share request-generation and cache identities, preventing stale pages or cached results from crossing filter changes.
+- Persisted topic values and native Bridge input are bounded and validated before being included in the official GraphQL filter.
+
 ## [0.2.59] - 2026-07-28
 
 ### Fixed

@@ -60,6 +60,38 @@ const SOLVED_KEY = "leetcodex.solved.v1";
 const DRAFT_KEY_PREFIX = "leetcodex.draft.v1";
 const ACTIVE_SESSION_KEY = "leetcodex.active.v1";
 const DIFFICULTIES = ["all", "easy", "medium", "hard"];
+const TOPICS = [
+  ["", "All topics"],
+  ["array", "Array"],
+  ["string", "String"],
+  ["hash-table", "Hash table"],
+  ["dynamic-programming", "Dynamic programming"],
+  ["math", "Math"],
+  ["sorting", "Sorting"],
+  ["greedy", "Greedy"],
+  ["depth-first-search", "Depth-first search"],
+  ["binary-search", "Binary search"],
+  ["matrix", "Matrix"],
+  ["tree", "Tree"],
+  ["breadth-first-search", "Breadth-first search"],
+  ["bit-manipulation", "Bit manipulation"],
+  ["two-pointers", "Two pointers"],
+  ["prefix-sum", "Prefix sum"],
+  ["heap-priority-queue", "Heap / priority queue"],
+  ["simulation", "Simulation"],
+  ["stack", "Stack"],
+  ["graph", "Graph"],
+  ["counting", "Counting"],
+  ["sliding-window", "Sliding window"],
+  ["design", "Design"],
+  ["backtracking", "Backtracking"],
+  ["union-find", "Union find"],
+  ["linked-list", "Linked list"],
+  ["monotonic-stack", "Monotonic stack"],
+  ["trie", "Trie"],
+  ["divide-and-conquer", "Divide and conquer"],
+  ["segment-tree", "Segment tree"],
+];
 const MAX_SEARCH_CHARS = 200;
 const SUBMISSION_LANGUAGES = [
   ["c", "C"],
@@ -375,8 +407,9 @@ function install({ resumeActive = false } = {}) {
         </select>
         <button type="button" class="leetcodex-login" data-action="login" aria-label="Log in to selected LeetCode site">Login</button>
         <span class="leetcodex-account" data-field="account">Offline</span>
-        <input class="leetcodex-search" data-setting="search" type="search" placeholder="Search problems" autocomplete="off" maxlength="${MAX_SEARCH_CHARS}" aria-label="Search official problems">
+        <input class="leetcodex-search" data-setting="search" type="search" placeholder="Title or ID" autocomplete="off" maxlength="${MAX_SEARCH_CHARS}" aria-label="Search by problem title or ID">
         <select class="leetcodex-select" data-setting="difficulty" title="Difficulty" aria-label="Difficulty"></select>
+        <select class="leetcodex-select leetcodex-topic" data-setting="topic" title="Algorithm topic" aria-label="Algorithm topic"></select>
         <select class="leetcodex-select leetcodex-problem-select" data-setting="problem" title="Problem" aria-label="Problem"></select>
         <select class="leetcodex-select leetcodex-language" data-setting="language" title="Submission language" aria-label="Submission language"></select>
         <label class="leetcodex-vim-toggle" title="Vim mode">
@@ -411,10 +444,18 @@ function install({ resumeActive = false } = {}) {
       option.textContent = titleCase(value);
       difficulty.appendChild(option);
     }
+    const topic = panel.querySelector("[data-setting='topic']");
+    for (const [value, label] of TOPICS) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      topic.appendChild(option);
+    }
     panel.querySelector("[data-setting='site']").value = state.settings.site;
     panel.querySelector("[data-setting='search']").value = state.settings.search;
     panel.querySelector("[data-setting='vim']").checked = state.settings.vimMode;
     difficulty.value = state.settings.difficulty;
+    topic.value = state.settings.topic;
     state.surface.insertBefore(panel, state.editorBranch);
     state.panel = panel;
     syncProblemDetails();
@@ -495,6 +536,13 @@ function install({ resumeActive = false } = {}) {
         rebuildProblemOptions();
         loadProblem(activeProblem(), true);
       }
+    }
+    if (event.target.dataset.setting === "topic") {
+      state.settings.topic = TOPICS.some(([value]) => value === event.target.value)
+        ? event.target.value
+        : "";
+      saveSettings(state.settings);
+      if (state.online) loadRemoteProblems();
     }
     if (event.target.dataset.setting === "problem") {
       saveCurrentDraft();
@@ -654,6 +702,7 @@ function install({ resumeActive = false } = {}) {
       site: state.settings.site,
       difficulty: state.settings.difficulty,
       search: state.settings.search,
+      topic: state.settings.topic,
     };
     setQuestionLoading(true);
     setResult("Loading official problem set...", "running");
@@ -796,7 +845,8 @@ function install({ resumeActive = false } = {}) {
       && generation === state.remoteLoadGeneration
       && criteria.site === state.settings.site
       && criteria.difficulty === state.settings.difficulty
-      && criteria.search === state.settings.search;
+      && criteria.search === state.settings.search
+      && criteria.topic === state.settings.topic;
   }
 
   async function loadRemoteQuestion(titleSlug) {
@@ -1455,6 +1505,7 @@ function defaultSettings() {
     language: "javascript",
     vimMode: false,
     search: "",
+    topic: "",
   };
 }
 

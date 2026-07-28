@@ -142,6 +142,7 @@ test("persisted settings reject malformed fields and bound hidden search state",
     language: "javascript",
     vimMode: false,
     search: "",
+    topic: "",
   };
   const normalized = normalizePersistedSettings({
     site: "lookalike",
@@ -151,6 +152,7 @@ test("persisted settings reject malformed fields and bound hidden search state",
     language: { slug: "cpp" },
     vimMode: "true",
     search: "abcdef",
+    topic: "../graph",
     unexpected: "discarded",
   }, defaults, new Set(["two-sum"]), 5);
   assert.deepEqual(normalized, { ...defaults, search: "abcde" });
@@ -165,6 +167,7 @@ test("persisted settings retain safe official selections and Unicode search text
     language: "javascript",
     vimMode: false,
     search: "",
+    topic: "",
   };
   assert.deepEqual(normalizePersistedSettings({
     site: "china",
@@ -174,6 +177,7 @@ test("persisted settings retain safe official selections and Unicode search text
     language: "python3",
     vimMode: true,
     search: "数组题目abc",
+    topic: "dynamic-programming",
   }, defaults, new Set(["two-sum", "valid-parentheses"]), 4), {
     site: "china",
     difficulty: "hard",
@@ -182,6 +186,7 @@ test("persisted settings retain safe official selections and Unicode search text
     language: "python3",
     vimMode: true,
     search: "数组题目",
+    topic: "dynamic-programming",
   });
 });
 
@@ -352,9 +357,9 @@ test("remaining problem page recovery reports its final failure", async () => {
 
 test("completed remote catalogs are cached by criteria with TTL and LRU bounds", () => {
   const cache = new Map();
-  const globalAll = { site: "global", difficulty: "all", search: "" };
-  const globalHard = { site: "global", difficulty: "hard", search: "" };
-  const chinaAll = { site: "china", difficulty: "all", search: "" };
+  const globalAll = { site: "global", difficulty: "all", search: "", topic: "" };
+  const globalHard = { site: "global", difficulty: "hard", search: "", topic: "" };
+  const chinaAll = { site: "china", difficulty: "all", search: "", topic: "" };
   const first = [{ titleSlug: "two-sum" }];
   const second = [{ titleSlug: "n-queens" }];
   const third = [{ titleSlug: "add-two-numbers" }];
@@ -372,12 +377,13 @@ test("completed remote catalogs are cached by criteria with TTL and LRU bounds",
 
 test("remote catalog cache rejects empty, future, and mismatched entries", () => {
   const cache = new Map();
-  const criteria = { site: "global", difficulty: "all", search: "array" };
+  const criteria = { site: "global", difficulty: "all", search: "array", topic: "" };
   assert.equal(storeRemoteCatalog(cache, criteria, [], 1_000), false);
   assert.equal(readRemoteCatalog(cache, criteria, 1_000), null);
   assert.equal(storeRemoteCatalog(cache, criteria, [{ titleSlug: "two-sum" }], 2_000), true);
   assert.equal(readRemoteCatalog(cache, criteria, 1_999), null);
   assert.equal(readRemoteCatalog(cache, { ...criteria, search: "graph" }, 2_000), null);
+  assert.equal(readRemoteCatalog(cache, { ...criteria, topic: "array" }, 2_000), null);
 });
 
 test("Run becomes cancellable Stop while Submit remains locked", () => {

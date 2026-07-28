@@ -249,6 +249,12 @@
   min-width: 120px;
 }
 
+.leetcodex-topic {
+  flex: 0 1 130px;
+  min-width: 96px;
+  max-width: 130px;
+}
+
 .leetcodex-language {
   flex: 0 0 auto;
   color: var(--leetcodex-muted);

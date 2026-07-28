@@ -457,12 +457,7 @@ fn instance_lock_diagnostic_at(runtime_directory: &Path, port: u16) -> serde_jso
             "path": path.to_string_lossy(),
         }),
         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-            let metadata = read_instance_lock_metadata(&file).ok();
-            serde_json::json!({
-                "status": "active",
-                "path": path.to_string_lossy(),
-                "metadata": metadata,
-            })
+            classify_active_instance_lock(&file, &path, port)
         }
         Err(error) => serde_json::json!({
             "status": "unavailable",
@@ -484,7 +479,48 @@ fn read_instance_lock_metadata(file: &File) -> Result<serde_json::Value> {
         .take(MAX_INSTANCE_LOCK_BYTES + 1)
         .read_to_string(&mut contents)
         .context("failed to read instance lock metadata")?;
-    Ok(parse_instance_lock_metadata(&contents))
+    parse_instance_lock_metadata(&contents)
+}
+
+fn classify_active_instance_lock(
+    file: &File,
+    path: &Path,
+    expected_port: u16,
+) -> serde_json::Value {
+    let metadata = match read_instance_lock_metadata(file) {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            return serde_json::json!({
+                "status": "invalid_metadata",
+                "path": path.to_string_lossy(),
+                "detail": format!("{error:#}"),
+            });
+        }
+    };
+    let metadata_port = metadata["port"]
+        .as_str()
+        .and_then(|value| value.parse::<u16>().ok());
+    if metadata_port != Some(expected_port) {
+        return serde_json::json!({
+            "status": "invalid_metadata",
+            "path": path.to_string_lossy(),
+            "metadata": metadata,
+            "detail": format!("instance lock port does not match requested port {expected_port}"),
+        });
+    }
+    if metadata["version"].as_str() != Some(env!("CARGO_PKG_VERSION")) {
+        return serde_json::json!({
+            "status": "version_mismatch",
+            "path": path.to_string_lossy(),
+            "metadata": metadata,
+            "detail": format!("instance lock version does not match Leetcodex {}", env!("CARGO_PKG_VERSION")),
+        });
+    }
+    serde_json::json!({
+        "status": "active",
+        "path": path.to_string_lossy(),
+        "metadata": metadata,
+    })
 }
 
 fn validate_runtime_directory_chain(runtime_directory: &Path) -> Result<bool> {
@@ -630,20 +666,48 @@ fn lock_path_metadata(path: &Path) -> Result<Option<fs::Metadata>> {
     }
 }
 
-fn parse_instance_lock_metadata(contents: &str) -> serde_json::Value {
+fn parse_instance_lock_metadata(contents: &str) -> Result<serde_json::Value> {
     let mut metadata = serde_json::Map::new();
     for line in contents.lines() {
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        if matches!(key, "pid" | "version" | "port") && !value.is_empty() {
-            metadata.insert(
+        let (key, value) = line
+            .split_once('=')
+            .context("instance lock metadata line must contain '='")?;
+        if !matches!(key, "pid" | "version" | "port") {
+            bail!("instance lock metadata contains unsupported field {key}");
+        }
+        if value.is_empty() {
+            bail!("instance lock metadata field {key} is empty");
+        }
+        if metadata
+            .insert(
                 key.to_string(),
                 serde_json::Value::String(value.to_string()),
-            );
+            )
+            .is_some()
+        {
+            bail!("instance lock metadata field {key} is duplicated");
         }
     }
-    serde_json::Value::Object(metadata)
+    for key in ["pid", "version", "port"] {
+        if !metadata.contains_key(key) {
+            bail!("instance lock metadata field {key} is missing");
+        }
+    }
+    let pid = metadata["pid"]
+        .as_str()
+        .and_then(|value| value.parse::<u32>().ok())
+        .filter(|value| *value > 0);
+    if pid.is_none() {
+        bail!("instance lock pid must be a positive integer");
+    }
+    if metadata["port"]
+        .as_str()
+        .and_then(|value| value.parse::<u16>().ok())
+        .is_none()
+    {
+        bail!("instance lock port must be an integer between 0 and 65535");
+    }
+    Ok(serde_json::Value::Object(metadata))
 }
 
 fn acquire_instance_lock_at(runtime_directory: &Path, port: u16) -> Result<InstanceLock> {
@@ -935,6 +999,50 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[test]
+    fn instance_lock_diagnostic_requires_complete_matching_metadata() {
+        let root = temporary_directory();
+        prepare_runtime_directory(&root).unwrap();
+        let cases = [
+            (
+                9560,
+                "version=0.2.0\nport=9560\n".to_string(),
+                "invalid_metadata",
+            ),
+            (
+                9561,
+                format!(
+                    "pid={}\nversion={}\nport=9999\n",
+                    std::process::id(),
+                    env!("CARGO_PKG_VERSION")
+                ),
+                "invalid_metadata",
+            ),
+            (
+                9562,
+                format!("pid={}\nversion=0.0.0\nport=9562\n", std::process::id()),
+                "version_mismatch",
+            ),
+            (
+                9563,
+                "x".repeat(MAX_INSTANCE_LOCK_BYTES as usize + 1),
+                "invalid_metadata",
+            ),
+        ];
+
+        for (port, contents, expected_status) in cases {
+            let path = root.join(format!("codex-{port}.lock"));
+            fs::write(&path, contents).unwrap();
+            let file = open_instance_lock_file(&path, false).unwrap();
+            file.try_lock_exclusive().unwrap();
+            let diagnostic = instance_lock_diagnostic_at(&root, port);
+            assert_eq!(diagnostic["status"], expected_status, "{diagnostic}");
+            drop(file);
+            fs::remove_file(path).unwrap();
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn instance_lock_rejects_linked_files_without_touching_the_target() {
@@ -1036,6 +1144,8 @@ mod tests {
             ("codex", "error"),
             ("accountBrowser", "error"),
             ("launcher", "available"),
+            ("launcher", "invalid_metadata"),
+            ("launcher", "version_mismatch"),
             ("cdp", "not_running"),
             ("renderer", "degraded"),
         ] {

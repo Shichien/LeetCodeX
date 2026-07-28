@@ -2,6 +2,14 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.57] - 2026-07-28
+
+### Fixed
+
+- `doctor` now classifies a locked launcher file as `active` only when its bounded metadata contains exactly one valid PID, version, and port matching the current diagnostic.
+- Missing, duplicate, unknown, malformed, oversized, or wrong-port lock metadata reports `invalid_metadata`; an otherwise valid lock owned by another Leetcodex version reports `version_mismatch`.
+- `doctor --strict` treats both new states as unhealthy instead of accepting lock contention alone as proof that the expected launcher owns the active renderer stack.
+
 ## [0.2.56] - 2026-07-28
 
 ### Security

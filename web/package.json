@@ -5,7 +5,8 @@
   "packageManager": "pnpm@11.10.0",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "generate:typing-corpus": "node typing/scripts/generate-corpus.mjs",
+    "test": "node --test tests/*.test.mjs typing/tests/*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

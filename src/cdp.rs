@@ -406,7 +406,7 @@ impl TargetSession {
         let response = self.command(
             "Runtime.evaluate",
             json!({
-                "expression": "typeof window.__LEETCODEX__?.ensure === 'function' && typeof window.__LEETCODEX__?.destroy === 'function'",
+                "expression": "typeof window.__LEETCODEX__?.ensure === 'function' && typeof window.__LEETCODEX__?.destroy === 'function' && typeof window.__COTYPEX__?.ensure === 'function' && typeof window.__COTYPEX__?.destroy === 'function'",
                 "returnByValue": true
             }),
         )?;
@@ -421,7 +421,7 @@ impl TargetSession {
         let cleanup_result = self.command(
             "Runtime.evaluate",
             json!({
-                "expression": "window.__LEETCODEX__?.destroy?.()",
+                "expression": "(() => { const typing = window.__COTYPEX__?.destroy?.(); const leetcode = window.__LEETCODEX__?.destroy?.(); return typing !== false && leetcode !== false; })()",
                 "returnByValue": true
             }),
         );
@@ -620,6 +620,7 @@ fn evaluate_renderer_state(target: &TargetInfo, port: u16) -> Result<Value> {
             "params": {
                 "expression": r#"(() => {
                   const api = window.__LEETCODEX__;
+                  const typing = window.__COTYPEX__;
                   const diagnostic = typeof api?.diagnostic === 'function' ? api.diagnostic() : null;
                   return {
                     injected: typeof api?.ensure === 'function' && typeof api?.destroy === 'function',
@@ -633,7 +634,13 @@ fn evaluate_renderer_state(target: &TargetInfo, port: u16) -> Result<Value> {
                       : null,
                     staleBridge: Number.isSafeInteger(diagnostic?.staleBridge)
                       ? diagnostic.staleBridge
-                      : null
+                      : null,
+                    typingInjected: typeof typing?.ensure === 'function' && typeof typing?.destroy === 'function',
+                    typingVersion: typeof typing?.version === 'string' ? typing.version : null,
+                    typingActive: typing?.active === true,
+                    typingHudCount: document.querySelectorAll('.cotypex-hud').length,
+                    typingOverlayCount: document.querySelectorAll('.cotypex-overlay').length,
+                    typingEditorCount: document.querySelectorAll('[data-cotypex-editor="true"]').length
                   };
                 })()"#,
                 "returnByValue": true
@@ -682,6 +689,21 @@ fn classify_renderer_state(target_id: &str, value: Value, expected_version: &str
         .get("pendingBridgeOldestMs")
         .is_some_and(Value::is_null);
     let stale_bridge = value.get("staleBridge").and_then(Value::as_u64);
+    let typing_injected = value.get("typingInjected").and_then(Value::as_bool) == Some(true);
+    let typing_version = value.get("typingVersion").and_then(Value::as_str);
+    let typing_active = value.get("typingActive").and_then(Value::as_bool) == Some(true);
+    let typing_hud_count = value
+        .get("typingHudCount")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let typing_overlay_count = value
+        .get("typingOverlayCount")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let typing_editor_count = value
+        .get("typingEditorCount")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     let bridge_diagnostic_valid =
         pending_bridge
             .zip(stale_bridge)
@@ -693,24 +715,44 @@ fn classify_renderer_state(target_id: &str, value: Value, expected_version: &str
                         pending_bridge_oldest_ms.is_some()
                     }
             });
-    let status = if !injected {
-        "not_injected"
-    } else if version != Some(expected_version) {
-        "version_mismatch"
+    let leetcode_ready = active && panel_count == 1 && editor_count == 1;
+    let typing_ready = typing_active
+        && typing_hud_count == 1
+        && typing_overlay_count == 1
+        && typing_editor_count == 1;
+    let inactive_surfaces = panel_count == 0
+        && editor_count == 0
+        && typing_hud_count == 0
+        && typing_overlay_count == 0
+        && typing_editor_count == 0;
+    let (status, mode) = if !injected {
+        ("not_injected", None)
+    } else if !typing_injected {
+        ("typing_not_injected", None)
+    } else if version != Some(expected_version) || typing_version != Some(expected_version) {
+        ("version_mismatch", None)
     } else if !bridge_diagnostic_valid {
-        "degraded"
+        ("degraded", None)
     } else if stale_bridge.is_some_and(|count| count > 0) {
-        "bridge_stalled"
-    } else if active && panel_count == 1 && editor_count == 1 {
-        "active"
-    } else if !active && panel_count == 0 && editor_count == 0 {
-        "inactive"
+        ("bridge_stalled", None)
+    } else if leetcode_ready
+        && !typing_active
+        && typing_hud_count == 0
+        && typing_overlay_count == 0
+        && typing_editor_count == 0
+    {
+        ("active", Some("leetcode"))
+    } else if !active && panel_count == 0 && editor_count == 0 && typing_ready {
+        ("active", Some("typing"))
+    } else if !active && !typing_active && inactive_surfaces {
+        ("inactive", None)
     } else {
-        "degraded"
+        ("degraded", None)
     };
     json!({
         "targetId": target_id,
         "status": status,
+        "mode": mode,
         "version": version,
         "active": active,
         "panelCount": panel_count,
@@ -718,6 +760,12 @@ fn classify_renderer_state(target_id: &str, value: Value, expected_version: &str
         "pendingBridge": pending_bridge,
         "pendingBridgeOldestMs": pending_bridge_oldest_ms,
         "staleBridge": stale_bridge,
+        "typingInjected": typing_injected,
+        "typingVersion": typing_version,
+        "typingActive": typing_active,
+        "typingHudCount": typing_hud_count,
+        "typingOverlayCount": typing_overlay_count,
+        "typingEditorCount": typing_editor_count,
     })
 }
 
@@ -725,7 +773,13 @@ fn renderer_report(targets: Vec<Value>) -> Value {
     let has_problem = targets.iter().any(|target| {
         matches!(
             target.get("status").and_then(Value::as_str),
-            Some("error" | "version_mismatch" | "degraded" | "bridge_stalled")
+            Some(
+                "error"
+                    | "version_mismatch"
+                    | "degraded"
+                    | "bridge_stalled"
+                    | "typing_not_injected"
+            )
         )
     });
     let status = if has_problem {
@@ -865,86 +919,77 @@ mod tests {
 
     #[test]
     fn renderer_state_requires_matching_version_and_exactly_one_active_editor() {
-        let healthy = classify_renderer_state(
-            "page-1",
-            json!({
-                "injected": true,
-                "version": "0.2.47",
-                "active": true,
-                "panelCount": 1,
-                "editorCount": 1,
-                "pendingBridge": 0,
-                "pendingBridgeOldestMs": null,
-                "staleBridge": 0,
-            }),
-            "0.2.47",
-        );
+        let healthy_value = json!({
+            "injected": true,
+            "version": "0.2.47",
+            "active": true,
+            "panelCount": 1,
+            "editorCount": 1,
+            "pendingBridge": 0,
+            "pendingBridgeOldestMs": null,
+            "staleBridge": 0,
+            "typingInjected": true,
+            "typingVersion": "0.2.47",
+            "typingActive": false,
+            "typingHudCount": 0,
+            "typingOverlayCount": 0,
+            "typingEditorCount": 0,
+        });
+        let healthy = classify_renderer_state("page-1", healthy_value.clone(), "0.2.47");
         assert_eq!(healthy["status"], "active");
+        assert_eq!(healthy["mode"], "leetcode");
         assert_eq!(healthy["pendingBridge"], 0);
 
-        let duplicate = classify_renderer_state(
-            "page-1",
-            json!({
-                "injected": true,
-                "version": "0.2.47",
-                "active": true,
-                "panelCount": 2,
-                "editorCount": 1,
-                "pendingBridge": 0,
-                "pendingBridgeOldestMs": null,
-                "staleBridge": 0,
-            }),
-            "0.2.47",
-        );
+        let mut duplicate_value = healthy_value.clone();
+        duplicate_value["panelCount"] = json!(2);
+        let duplicate = classify_renderer_state("page-1", duplicate_value, "0.2.47");
         assert_eq!(duplicate["status"], "degraded");
 
-        let mismatch = classify_renderer_state(
-            "page-1",
-            json!({
-                "injected": true,
-                "version": "0.2.46",
-                "active": true,
-                "panelCount": 1,
-                "editorCount": 1,
-                "pendingBridge": 0,
-                "pendingBridgeOldestMs": null,
-                "staleBridge": 0,
-            }),
-            "0.2.47",
-        );
+        let mut mismatch_value = healthy_value.clone();
+        mismatch_value["typingVersion"] = json!("0.2.46");
+        let mismatch = classify_renderer_state("page-1", mismatch_value, "0.2.47");
         assert_eq!(mismatch["status"], "version_mismatch");
 
-        let pending = classify_renderer_state(
-            "page-1",
-            json!({
-                "injected": true,
-                "version": "0.2.47",
-                "active": true,
-                "panelCount": 1,
-                "editorCount": 1,
-                "pendingBridge": 1,
-                "pendingBridgeOldestMs": 500,
-                "staleBridge": 0,
-            }),
-            "0.2.47",
-        );
+        let mut pending_value = healthy_value.clone();
+        pending_value["pendingBridge"] = json!(1);
+        pending_value["pendingBridgeOldestMs"] = json!(500);
+        let pending = classify_renderer_state("page-1", pending_value, "0.2.47");
         assert_eq!(pending["status"], "active");
 
-        let stalled = classify_renderer_state(
-            "page-1",
-            json!({
-                "injected": true,
-                "version": "0.2.47",
-                "active": true,
-                "panelCount": 1,
-                "editorCount": 1,
-                "pendingBridge": 1,
-                "pendingBridgeOldestMs": 22_001,
-                "staleBridge": 1,
-            }),
-            "0.2.47",
-        );
+        let mut stalled_value = healthy_value.clone();
+        stalled_value["pendingBridge"] = json!(1);
+        stalled_value["pendingBridgeOldestMs"] = json!(22_001);
+        stalled_value["staleBridge"] = json!(1);
+        let stalled = classify_renderer_state("page-1", stalled_value, "0.2.47");
         assert_eq!(stalled["status"], "bridge_stalled");
+
+        let mut legacy_value = healthy_value.clone();
+        legacy_value
+            .as_object_mut()
+            .unwrap()
+            .remove("typingInjected");
+        let legacy = classify_renderer_state("page-1", legacy_value, "0.2.47");
+        assert_eq!(legacy["status"], "typing_not_injected");
+
+        let mut typing_value = healthy_value.clone();
+        typing_value["active"] = json!(false);
+        typing_value["panelCount"] = json!(0);
+        typing_value["editorCount"] = json!(0);
+        typing_value["typingActive"] = json!(true);
+        typing_value["typingHudCount"] = json!(1);
+        typing_value["typingOverlayCount"] = json!(1);
+        typing_value["typingEditorCount"] = json!(1);
+        let typing = classify_renderer_state("page-1", typing_value, "0.2.47");
+        assert_eq!(typing["status"], "active");
+        assert_eq!(typing["mode"], "typing");
+
+        let mut conflicting_value = healthy_value;
+        conflicting_value["typingActive"] = json!(true);
+        conflicting_value["typingHudCount"] = json!(1);
+        conflicting_value["typingOverlayCount"] = json!(1);
+        conflicting_value["typingEditorCount"] = json!(1);
+        let conflicting = classify_renderer_state("page-1", conflicting_value, "0.2.47");
+        assert_eq!(conflicting["status"], "degraded");
 
         let legacy = classify_renderer_state(
             "page-1",
@@ -958,7 +1003,7 @@ mod tests {
             }),
             "0.2.47",
         );
-        assert_eq!(legacy["status"], "degraded");
+        assert_eq!(legacy["status"], "typing_not_injected");
     }
 
     #[test]
@@ -1154,7 +1199,13 @@ mod tests {
                 if index == 3 {
                     assert_eq!(
                         request["params"]["expression"],
-                        "typeof window.__LEETCODEX__?.ensure === 'function' && typeof window.__LEETCODEX__?.destroy === 'function'"
+                        "typeof window.__LEETCODEX__?.ensure === 'function' && typeof window.__LEETCODEX__?.destroy === 'function' && typeof window.__COTYPEX__?.ensure === 'function' && typeof window.__COTYPEX__?.destroy === 'function'"
+                    );
+                }
+                if index == 5 {
+                    assert_eq!(
+                        request["params"]["expression"],
+                        "(() => { const typing = window.__COTYPEX__?.destroy?.(); const leetcode = window.__LEETCODEX__?.destroy?.(); return typing !== false && leetcode !== false; })()"
                     );
                 }
                 let id = request["id"].as_u64().unwrap();

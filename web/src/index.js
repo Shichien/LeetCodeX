@@ -253,9 +253,7 @@ function install({ resumeActive = false } = {}) {
   window.addEventListener("resize", onResize, { passive: true });
 
   function activate() {
-    if (document.querySelector("[data-cotypex-editor='true']")) {
-      window.__COTYPEX__?.toggle?.();
-    }
+    if (window.__COTYPEX__?.active) window.__COTYPEX__.toggle();
     const editor = findMainComposer();
     if (!editor) return false;
     state.active = true;
@@ -401,6 +399,7 @@ function install({ resumeActive = false } = {}) {
     panel.innerHTML = `
       <div class="leetcodex-toolbar">
         <div class="leetcodex-brand">Leetcodex</div>
+        <button type="button" class="leetcodex-mode-switch" data-action="typing" title="Switch to typing practice">Typing</button>
         <select class="leetcodex-select leetcodex-site" data-setting="site" title="LeetCode site">
           <option value="global">leetcode.com</option>
           <option value="china">leetcode.cn</option>
@@ -468,6 +467,11 @@ function install({ resumeActive = false } = {}) {
     const button = event.target instanceof Element ? event.target.closest("button[data-action]") : null;
     if (!button) return;
     const action = button.dataset.action;
+    if (action === "typing") {
+      deactivate();
+      window.__COTYPEX__?.toggle?.();
+      return;
+    }
     if (action === "details") {
       toggleProblemDetails();
       return;

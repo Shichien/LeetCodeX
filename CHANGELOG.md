@@ -2,6 +2,19 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.61] - 2026-07-29
+
+### Added
+
+- CotypeX programming-language typing practice is now bundled into the Leetcodex launcher and Codex++ userscript, with its 2,160 business-oriented code snippets and existing practice settings.
+- `Ctrl+Alt+T` (`Control+Option+T` on macOS) opens Typing mode, while compact `Typing` and `LeetCode` controls switch directly between the two tools.
+- Renderer diagnostics now report `mode` as `leetcode`, `typing`, or `null` and verify both injected APIs and their active UI instances.
+
+### Fixed
+
+- Leetcodex and CotypeX activation is mutually exclusive, so switching modes restores and remounts the official Codex composer without leaving duplicate editors, overlays, or controls.
+- Launcher shutdown and reinjection clean up both tools instead of leaving the inactive userscript attached to a stale renderer.
+
 ## [0.2.60] - 2026-07-28
 
 ### Added

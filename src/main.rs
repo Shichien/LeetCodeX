@@ -369,7 +369,9 @@ fn attach_and_watch_locked(port: u16, _instance_lock: InstanceLock) -> Result<()
 
     let bridge_token = bridge::generate_token();
     let script = LEETCODEX_SCRIPT.replace("__LEETCODEX_BRIDGE_TOKEN__", &bridge_token);
-    println!("Leetcodex is active. Press Ctrl+Alt+L inside Codex to start coding practice.");
+    println!(
+        "Leetcodex is active. Press Ctrl+Alt+L for LeetCode or Ctrl+Alt+T for typing practice."
+    );
     println!("Account requests use the authenticated Codex CDP binding.");
     println!("Keep this process running; press Ctrl+C to remove the injected behavior.");
     client.watch_and_inject(&script, &bridge_token, &running)

@@ -1,6 +1,6 @@
 # Leetcodex
 
-Leetcodex 是一个直接在 Codex 桌面版官方输入区内运行的算法练习工具。用户可以选择 `leetcode.com` 或 `leetcode.cn`，配对对应站点的账号，按标题或题号搜索官方题库、按难度和算法类型筛选、切换语言模板、运行样例、提交到官方 judge 并同步 Accepted 状态。未登录时仍可使用内置离线题库。
+Leetcodex 是一个直接在 Codex 桌面版官方输入区内运行的编程练习工具。它组合了 LeetCode 刷题与 CotypeX 代码打字两种互斥模式。刷题模式可以选择 `leetcode.com` 或 `leetcode.cn`，配对对应站点的账号，按标题或题号搜索官方题库、按难度和算法类型筛选、切换语言模板、运行样例、提交到官方 judge 并同步 Accepted 状态。未登录时仍可使用内置离线题库。Typing 模式提供 2,160 条多语言业务代码片段、计时与字数预设、准确率和 WPM 统计、收藏、每日练习及输入辅助设置。
 
 官方题面会保留段落和列表换行，并以 Markdown 风格反引号标记行内代码；长文本和长标识符会在题面区域内自动换行。
 
@@ -18,7 +18,7 @@ Leetcodex 是一个直接在 Codex 桌面版官方输入区内运行的算法练
 
 如果自动发现失败，可通过 `--codex-path /Applications/Codex.app` 显式指定应用。
 
-Codex 打开后按 `Control+Option+L` 进入或退出刷题模式。
+Codex 打开后按 `Control+Option+L` 进入或退出刷题模式，按 `Control+Option+T` 进入或退出 Typing 模式。两个模式的工具栏也可以直接互相切换。
 
 在面板中选择站点并点击 `Login`。完成浏览器登录后，账号名、官方题库和提交功能会自动出现。全球站与中国站使用不同的浏览器配置，可以分别保持登录。
 
@@ -28,7 +28,7 @@ Codex 打开后按 `Control+Option+L` 进入或退出刷题模式。
 .\leetcodex.exe run
 ```
 
-Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式。
+Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式，按 `Ctrl+Alt+T` 进入或退出 Typing 模式。两个模式的工具栏也可以直接互相切换。
 
 发布包也提供 `Start Leetcodex.cmd`，可以直接双击启动。自动发现失败时，使用 `--codex-path "C:\绝对路径\ChatGPT.exe"`。
 
@@ -52,7 +52,7 @@ Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式。
 ./target/release/leetcodex doctor --strict --json
 ```
 
-报告会包含顶层 `healthy`、Leetcodex 版本、操作系统、Codex 安装位置、账号配对浏览器、两站独立配对会话的配置目录与动态端口、启动器单实例锁、Codex CDP 状态、只读 renderer 注入健康度和结构化 `drafts` 草稿目录状态。Launcher 诊断会拒绝链接或重解析的 runtime 目录和锁文件，并从已验证句柄读取最多 4 KiB 的锁元数据；只有 PID、端口和版本结构完整且与本次诊断一致时状态才是 `active`，畸形或端口错误为 `invalid_metadata`，旧版 launcher 为 `version_mismatch`。草稿诊断只读取路径类型、可读性和 Unix 隐私权限，不创建或修改文件；Renderer 诊断只读取 Leetcodex 版本、active、面板/编辑器数量、Bridge 队列长度、最老请求年龄和过期数量，不读取请求内容、对话或草稿内容。超过截止时间与两秒调度宽限的请求会报告 `bridge_stalled`。`--strict` 会在 Codex、账号浏览器、launcher、CDP、renderer 或草稿目录不安全/不可用时返回非零退出码；LeetCode 是否已登录不影响健康结论。旧版 `draftDirectory` 路径字段继续保留。提交问题时建议附上 `--json` 输出，但不要附带草稿文件内容。
+报告会包含顶层 `healthy`、Leetcodex 版本、操作系统、Codex 安装位置、账号配对浏览器、两站独立配对会话的配置目录与动态端口、启动器单实例锁、Codex CDP 状态、只读 renderer 注入健康度和结构化 `drafts` 草稿目录状态。Launcher 诊断会拒绝链接或重解析的 runtime 目录和锁文件，并从已验证句柄读取最多 4 KiB 的锁元数据；只有 PID、端口和版本结构完整且与本次诊断一致时状态才是 `active`，畸形或端口错误为 `invalid_metadata`，旧版 launcher 为 `version_mismatch`。草稿诊断只读取路径类型、可读性和 Unix 隐私权限，不创建或修改文件；Renderer 诊断会验证 Leetcodex 与 CotypeX 的版本和实例数量，并以 `mode: "leetcode"`、`mode: "typing"` 或 `mode: null` 表示当前模式。它还读取 Bridge 队列长度、最老请求年龄和过期数量，但不读取请求内容、对话、练习文本或草稿内容。超过截止时间与两秒调度宽限的请求会报告 `bridge_stalled`。`--strict` 会在 Codex、账号浏览器、launcher、CDP、renderer 或草稿目录不安全/不可用时返回非零退出码；LeetCode 是否已登录不影响健康结论。旧版 `draftDirectory` 路径字段继续保留。提交问题时建议附上 `--json` 输出，但不要附带草稿文件内容。
 
 ### 重置账号配对
 
@@ -77,6 +77,8 @@ Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式。
 ## 操作
 
 - `Ctrl+Alt+L`：进入或退出 Leetcodex，并恢复原 Codex 草稿。
+- `Ctrl+Alt+T`：进入或退出 CotypeX Typing 模式，并恢复原 Codex 草稿。
+- 面板中的 `Typing` / `LeetCode`：不退出练习区，直接在两种模式之间切换。
 - `Ctrl+Enter` 或 `Command+Enter`：运行公开样例。
 - `Ctrl+F` 或 `Command+F`：打开编辑器右上角查找与替换。
 - `Ctrl+S` 或 `Command+S`：立即保存当前草稿。

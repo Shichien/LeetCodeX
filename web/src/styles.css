@@ -115,6 +115,7 @@
 
 .leetcodex-select,
 .leetcodex-login,
+.leetcodex-mode-switch,
 .leetcodex-search,
 .leetcodex-actions button {
   height: 25px;
@@ -277,6 +278,8 @@
 
 .leetcodex-login:hover,
 .leetcodex-login:focus-visible,
+.leetcodex-mode-switch:hover,
+.leetcodex-mode-switch:focus-visible,
 .leetcodex-search:focus,
 .leetcodex-actions button:hover:not(:disabled),
 .leetcodex-actions button:focus-visible,
@@ -284,6 +287,13 @@
   border-color: color-mix(in srgb, currentColor 34%, transparent);
   background: color-mix(in srgb, currentColor 7%, transparent);
   outline: none;
+}
+
+.leetcodex-mode-switch {
+  flex: 0 0 auto;
+  padding: 0 7px;
+  color: var(--leetcodex-muted);
+  cursor: pointer;
 }
 
 .leetcodex-details-toggle:hover,

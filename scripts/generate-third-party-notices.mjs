@@ -46,6 +46,15 @@ for (const packages of Object.values(npmLicenses)) {
     });
   }
 }
+records.push({
+  ecosystem: "Bundled",
+  name: "CotypeX",
+  version: "0.5.5 source snapshot",
+  license: "MIT",
+  authors: "CoTypeX contributors",
+  source: "https://github.com/Shichien/CotypeX",
+  roots: [path.join(root, "web", "typing")],
+});
 records.sort((left, right) => left.ecosystem.localeCompare(right.ecosystem)
   || left.name.localeCompare(right.name)
   || left.version.localeCompare(right.version));

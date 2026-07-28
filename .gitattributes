@@ -1,0 +1,7 @@
+* text=auto
+*.sh text eol=lf
+*.command text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+THIRD_PARTY_NOTICES.md -whitespace
+dist/leetcodex.user.js -whitespace

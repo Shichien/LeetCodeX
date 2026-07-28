@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Leetcodex Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #0e1011; color: #edf1ef; font-family: Inter, system-ui, sans-serif; }
+    .shell { display: grid; grid-template-columns: 236px 1fr; width: 100vw; height: 100vh; }
+    aside { padding: 18px 14px; border-right: 1px solid #24292a; background: #121516; }
+    .logo { margin-bottom: 26px; font-weight: 720; }
+    .nav { display: grid; gap: 6px; color: #89918f; font-size: 13px; }
+    .nav div { padding: 8px 10px; border-radius: 6px; }
+    .nav .active { background: #202526; color: #f1f4f2; }
+    main { display: grid; grid-template-rows: 54px 1fr auto; min-width: 0; background: #0e1011; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 0 22px; border-bottom: 1px solid #202425; font-size: 13px; }
+    .thread { width: min(760px, calc(100% - 40px)); margin: auto; color: #a9b0ae; font-size: 14px; line-height: 1.7; }
+    .message { width: 72%; margin-bottom: 24px; }
+    .message.user { margin-left: auto; padding: 12px 14px; border-radius: 8px; background: #1b2021; color: #e7ebe9; }
+    .composer-wrap { width: min(800px, calc(100% - 36px)); margin: 0 auto 18px; }
+    .composer-surface-chrome { min-height: 112px; padding: 14px; border: 1px solid #303637; border-radius: 8px; background: #171b1c; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    .ProseMirror { min-height: 52px; outline: none; color: #edf1ef; font-size: 14px; }
+    .composer-footer { display: flex; justify-content: space-between; color: #727b78; font-size: 11px; }
+    @media (max-width: 700px) {
+      .shell { grid-template-columns: minmax(0, 1fr); }
+      aside { display: none; }
+      header { padding: 0 12px; }
+      .thread { width: calc(100% - 24px); }
+      .composer-wrap { width: calc(100% - 16px); margin-bottom: 8px; }
+      .composer-surface-chrome { padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="logo">Codex</div>
+      <div class="nav"><div class="active">Leetcodex</div><div>Local tasks</div><div>Settings</div></div>
+    </aside>
+    <main class="main-surface">
+      <header><span>Leetcodex interface test</span><span>Local</span></header>
+      <div class="thread thread-scroll-container" role="main">
+        <div class="message user">在 Codex 输入框里打开一道本地算法题。</div>
+        <div class="message">题目、代码执行和通过记录都保存在本机，不连接在线判题服务。</div>
+      </div>
+      <div class="composer-wrap">
+        <div class="composer-surface-chrome">
+          <div class="ProseMirror" role="textbox" contenteditable="true"></div>
+          <div class="composer-footer"><span>Local</span><span>Send</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="../../dist/leetcodex.user.js"></script>
+</body>
+</html>

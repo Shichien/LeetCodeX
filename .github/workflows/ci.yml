@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.10.0
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: taiki-e/install-action@f1b61bf3a1373bccc1ebdc11506122709bd40dee # cargo-audit
+      - name: Install frontend dependencies
+        run: pnpm --dir web install --frozen-lockfile
+      - name: Audit production dependencies
+        run: |
+          pnpm --dir web audit --prod --audit-level high
+          cargo audit --deny warnings
+
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.10.0
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          components: clippy,rustfmt
+      - name: Install frontend dependencies
+        run: pnpm --dir web install --frozen-lockfile
+      - name: Verify release metadata
+        run: node scripts/check-release-version.mjs
+      - name: Verify packaged launchers
+        run: node scripts/check-launchers.mjs
+      - name: Verify third-party notices
+        run: node scripts/generate-third-party-notices.mjs --check
+      - name: Test and build frontend
+        run: |
+          pnpm --dir web test
+          pnpm --dir web build
+      - name: Verify Rust
+        run: |
+          cargo fmt --check
+          cargo test --all-targets --locked
+          cargo clippy --all-targets --locked -- -D warnings
+          cargo build --release --locked

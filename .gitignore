@@ -1,0 +1,6 @@
+/target/
+/web/node_modules/
+/playwright-report/
+/.playwright-cli/
+/output/
+/release/

@@ -1,0 +1,479 @@
+[data-leetcodex-editor="true"] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+  tab-size: 2 !important;
+  white-space: pre-wrap !important;
+}
+
+.leetcodex-panel {
+  --leetcodex-fg: color-mix(in srgb, currentColor 92%, transparent);
+  --leetcodex-muted: color-mix(in srgb, currentColor 58%, transparent);
+  --leetcodex-border: color-mix(in srgb, currentColor 14%, transparent);
+  --leetcodex-panel: color-mix(in srgb, currentColor 5%, transparent);
+  display: grid;
+  container-name: leetcodex-panel;
+  container-type: inline-size;
+  flex: 0 0 auto;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--leetcodex-border);
+  color: inherit;
+  font: 12px/1.35 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+.leetcodex-code-editor {
+  position: relative;
+  flex: 0 0 clamp(280px, 42vh, 380px);
+  width: 100%;
+  min-width: 0;
+  height: clamp(280px, 42vh, 380px);
+  overflow: hidden;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--leetcodex-border, color-mix(in srgb, currentColor 14%, transparent));
+}
+
+.leetcodex-code-editor .cm-editor {
+  width: 100%;
+  height: 100%;
+  font-size: 13px;
+}
+
+.leetcodex-code-editor .cm-scroller {
+  overflow: auto;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  line-height: 1.55;
+}
+
+.leetcodex-code-editor .cm-focused {
+  outline: none;
+}
+
+.leetcodex-code-editor .cm-gutters {
+  border-right-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.leetcodex-code-editor .cm-editor .cm-panels-top {
+  position: absolute;
+  top: 8px !important;
+  right: 12px;
+  left: auto;
+  width: min(520px, calc(100% - 24px));
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 4px;
+  box-shadow: 0 5px 18px rgb(0 0 0 / 28%);
+}
+
+.leetcodex-code-editor .cm-editor .cm-panel.cm-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 26px 5px 7px;
+}
+
+.leetcodex-code-editor .cm-panel.cm-search input,
+.leetcodex-code-editor .cm-panel.cm-search button,
+.leetcodex-code-editor .cm-panel.cm-search label {
+  margin: 1px 3px 1px 0;
+}
+
+.leetcodex-code-editor .cm-panel.cm-search input[type="text"] {
+  width: min(170px, 38%);
+  box-sizing: border-box;
+}
+
+.leetcodex-code-editor .cm-panel.cm-search br {
+  display: none;
+}
+
+.leetcodex-code-editor .cm-vim-panel {
+  min-height: 20px;
+  padding: 2px 8px;
+  box-sizing: border-box;
+  font: 11px/16px "SFMono-Regular", Consolas, monospace;
+}
+
+.leetcodex-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 26px;
+}
+
+.leetcodex-brand {
+  flex: 0 0 auto;
+  margin-right: 2px;
+  color: var(--leetcodex-fg);
+  font-weight: 700;
+}
+
+.leetcodex-select,
+.leetcodex-login,
+.leetcodex-search,
+.leetcodex-actions button {
+  height: 25px;
+  box-sizing: border-box;
+  border: 1px solid var(--leetcodex-border);
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.leetcodex-details-toggle {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--leetcodex-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--leetcodex-muted);
+  cursor: pointer;
+  font: 600 14px/20px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.leetcodex-vim-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: 25px;
+  color: var(--leetcodex-muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.leetcodex-vim-toggle input {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  margin: 0;
+  appearance: none;
+  border: 1px solid var(--leetcodex-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  cursor: pointer;
+}
+
+.leetcodex-vim-toggle input::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+  transition: transform 120ms ease;
+}
+
+.leetcodex-vim-toggle input:checked {
+  border-color: #2f9e63;
+  color: #2f9e63;
+}
+
+.leetcodex-vim-toggle input:checked::after {
+  transform: translateX(10px);
+}
+
+.leetcodex-select {
+  flex: 0 0 auto;
+  max-width: 92px;
+  padding: 0 5px;
+  cursor: pointer;
+}
+
+.leetcodex-panel[data-color-scheme="dark"] .leetcodex-select {
+  color-scheme: dark;
+}
+
+.leetcodex-panel[data-color-scheme="light"] .leetcodex-select {
+  color-scheme: light;
+}
+
+.leetcodex-select option {
+  background-color: Canvas;
+  color: CanvasText;
+}
+
+.leetcodex-site {
+  max-width: 112px;
+}
+
+.leetcodex-login {
+  flex: 0 0 auto;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.leetcodex-account {
+  flex: 0 1 110px;
+  overflow: hidden;
+  color: var(--leetcodex-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leetcodex-account[data-status="online"] {
+  color: #28a36a;
+}
+
+.leetcodex-account[data-status="pending"] {
+  color: #d59222;
+}
+
+.leetcodex-account[data-status="error"] {
+  color: #d55353;
+}
+
+.leetcodex-search {
+  flex: 1 1 140px;
+  min-width: 110px;
+  max-width: 180px;
+  padding: 0 7px;
+  outline: none;
+}
+
+.leetcodex-problem-select {
+  flex: 1 1 190px;
+  max-width: 260px;
+  min-width: 120px;
+}
+
+.leetcodex-language {
+  flex: 0 0 auto;
+  color: var(--leetcodex-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.leetcodex-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.leetcodex-actions button {
+  min-width: 42px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.leetcodex-login:hover,
+.leetcodex-login:focus-visible,
+.leetcodex-search:focus,
+.leetcodex-actions button:hover:not(:disabled),
+.leetcodex-actions button:focus-visible,
+.leetcodex-select:focus-visible {
+  border-color: color-mix(in srgb, currentColor 34%, transparent);
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  outline: none;
+}
+
+.leetcodex-details-toggle:hover,
+.leetcodex-details-toggle:focus-visible {
+  border-color: color-mix(in srgb, currentColor 34%, transparent);
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  outline: none;
+}
+
+.leetcodex-panel button:disabled,
+.leetcodex-panel select:disabled,
+.leetcodex-panel input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.leetcodex-actions .leetcodex-primary {
+  background: color-mix(in srgb, #2f9e63 78%, transparent);
+  border-color: color-mix(in srgb, #2f9e63 90%, transparent);
+  color: #ffffff;
+}
+
+.leetcodex-problem {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.leetcodex-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.leetcodex-heading strong {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--leetcodex-fg);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leetcodex-difficulty,
+.leetcodex-solved {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.leetcodex-difficulty[data-level="easy"] {
+  color: #28a36a;
+}
+
+.leetcodex-difficulty[data-level="medium"] {
+  color: #d59222;
+}
+
+.leetcodex-difficulty[data-level="hard"] {
+  color: #d55353;
+}
+
+.leetcodex-solved {
+  color: #28a36a;
+}
+
+.leetcodex-problem p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--leetcodex-muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.leetcodex-problem[data-expanded="true"] p {
+  display: block;
+  max-height: 170px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.leetcodex-problem[data-expanded="true"] .leetcodex-example code {
+  max-height: 120px;
+}
+
+.leetcodex-example {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  color: var(--leetcodex-muted);
+}
+
+.leetcodex-example span {
+  flex: 0 0 auto;
+  font-weight: 650;
+}
+
+.leetcodex-example code {
+  max-height: 68px;
+  overflow: auto;
+  color: var(--leetcodex-fg);
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.leetcodex-result {
+  min-height: 17px;
+  max-height: 62px;
+  overflow: auto;
+  color: var(--leetcodex-muted);
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.leetcodex-result[data-status="running"] {
+  color: #d59222;
+}
+
+.leetcodex-result[data-status="success"] {
+  color: #28a36a;
+}
+
+.leetcodex-result[data-status="error"] {
+  color: #d55353;
+}
+
+@media (max-height: 640px) {
+  .leetcodex-code-editor {
+    flex-basis: clamp(200px, 38vh, 260px);
+    height: clamp(200px, 38vh, 260px);
+  }
+
+  .leetcodex-panel {
+    gap: 6px;
+    padding-block: 7px 8px;
+  }
+
+  .leetcodex-problem p {
+    -webkit-line-clamp: 1;
+  }
+
+  .leetcodex-example code {
+    max-height: 42px;
+  }
+}
+
+@container leetcodex-panel (max-width: 640px) {
+  .leetcodex-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .leetcodex-brand,
+  .leetcodex-account {
+    display: none;
+  }
+
+  .leetcodex-problem-select {
+    max-width: none;
+  }
+
+  .leetcodex-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .leetcodex-actions button {
+    flex: 1 1 0;
+  }
+}
+
+/* Fallback for older embedded Chromium builds without container queries. */
+@media (max-width: 760px) {
+  .leetcodex-panel {
+    padding-inline: 8px;
+  }
+
+  .leetcodex-brand,
+  .leetcodex-account {
+    display: none;
+  }
+
+  .leetcodex-problem-select {
+    max-width: none;
+  }
+
+  .leetcodex-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .leetcodex-actions button {
+    flex: 1 1 0;
+  }
+}

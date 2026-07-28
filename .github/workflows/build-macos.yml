@@ -1,0 +1,131 @@
+name: Build release packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.10.0
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: taiki-e/install-action@f1b61bf3a1373bccc1ebdc11506122709bd40dee # cargo-audit
+      - name: Install frontend dependencies
+        run: pnpm --dir web install --frozen-lockfile
+      - name: Verify release metadata
+        run: node scripts/check-release-version.mjs
+      - name: Audit production dependencies
+        run: |
+          pnpm --dir web audit --prod --audit-level high
+          cargo audit --deny warnings
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: node scripts/check-release-version.mjs --tag "$GITHUB_REF_NAME"
+
+  macos-universal:
+    needs: verify-version
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.10.0
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          components: clippy,rustfmt
+      - name: Build universal macOS package
+        run: bash scripts/build-macos-release.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Leetcodex-macos-universal
+          path: |
+            release/Leetcodex-*-macos-universal/
+            release/Leetcodex-*-macos-universal.zip
+            release/Leetcodex-*-macos-universal.zip.sha256
+          if-no-files-found: error
+
+  windows-x64:
+    needs: verify-version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.10.0
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          components: clippy,rustfmt
+      - name: Build Windows package
+        shell: pwsh
+        run: ./scripts/build-windows-release.ps1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Leetcodex-windows-x64
+          path: |
+            release/Leetcodex-*-windows-x64/
+            release/Leetcodex-*-windows-x64.zip
+            release/Leetcodex-*-windows-x64.zip.sha256
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos-universal, windows-x64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: Leetcodex-*
+          path: release-artifacts
+      - name: Verify and stage release assets
+        run: |
+          mkdir publish
+          mapfile -d '' checksums < <(find release-artifacts -name '*.zip.sha256' -print0)
+          test "${#checksums[@]}" -eq 2
+          for checksum in "${checksums[@]}"; do
+            directory="$(dirname "$checksum")"
+            filename="$(basename "$checksum")"
+            (cd "$directory" && sha256sum -c "$filename")
+            cp "$checksum" publish/
+            cp "${checksum%.sha256}" publish/
+          done
+          test "$(find publish -maxdepth 1 -name '*.zip' | wc -l)" -eq 2
+          test "$(find publish -maxdepth 1 -name '*.zip.sha256' | wc -l)" -eq 2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: publish/*.zip
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" publish/* --generate-notes --verify-tag

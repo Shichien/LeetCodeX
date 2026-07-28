@@ -1,6 +1,6 @@
 [package]
 name = "leetcodex"
-version = "0.2.54"
+version = "0.2.55"
 edition = "2024"
 license = "MIT"
 description = "Local algorithm practice injected into the Codex desktop composer"
@@ -10,6 +10,7 @@ anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 ctrlc = "3.4"
 fs2 = "0.4"
+libc = "0.2"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json"] }
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }

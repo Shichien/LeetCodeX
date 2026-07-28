@@ -545,12 +545,13 @@ dependencies = [
 
 [[package]]
 name = "leetcodex"
-version = "0.2.54"
+version = "0.2.55"
 dependencies = [
  "anyhow",
  "clap",
  "ctrlc",
  "fs2",
+ "libc",
  "rand",
  "reqwest",
  "serde",

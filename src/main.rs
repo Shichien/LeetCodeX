@@ -20,6 +20,7 @@ use rand::RngCore;
 
 const LEETCODEX_SCRIPT: &str = include_str!("../dist/leetcodex.user.js");
 const DEFAULT_PORT: u16 = 9337;
+const MAX_INSTANCE_LOCK_BYTES: u64 = 4096;
 
 #[derive(Parser)]
 #[command(
@@ -401,19 +402,52 @@ fn instance_lock_diagnostic(port: u16) -> serde_json::Value {
 
 fn instance_lock_diagnostic_at(runtime_directory: &Path, port: u16) -> serde_json::Value {
     let path = runtime_directory.join(format!("codex-{port}.lock"));
-    if !path.exists() {
-        return serde_json::json!({
-            "status": "available",
-            "path": path.to_string_lossy(),
-        });
+    match validate_runtime_directory_chain(runtime_directory) {
+        Ok(true) => {}
+        Ok(false) => {
+            return serde_json::json!({
+                "status": "available",
+                "path": path.to_string_lossy(),
+            });
+        }
+        Err(error) => {
+            return serde_json::json!({
+                "status": "unavailable",
+                "path": path.to_string_lossy(),
+                "detail": format!("{error:#}"),
+            });
+        }
     }
-    let file = match OpenOptions::new().read(true).write(true).open(&path) {
-        Ok(file) => file,
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if is_real_file(&metadata) => {}
+        Ok(_) => {
+            return serde_json::json!({
+                "status": "unavailable",
+                "path": path.to_string_lossy(),
+                "detail": "instance lock must be a regular file without links or reparse points",
+            });
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return serde_json::json!({
+                "status": "available",
+                "path": path.to_string_lossy(),
+            });
+        }
         Err(error) => {
             return serde_json::json!({
                 "status": "unavailable",
                 "path": path.to_string_lossy(),
                 "detail": error.to_string(),
+            });
+        }
+    }
+    let file = match open_instance_lock_file(&path, false) {
+        Ok(file) => file,
+        Err(error) => {
+            return serde_json::json!({
+                "status": "unavailable",
+                "path": path.to_string_lossy(),
+                "detail": format!("{error:#}"),
             });
         }
     };
@@ -423,9 +457,7 @@ fn instance_lock_diagnostic_at(runtime_directory: &Path, port: u16) -> serde_jso
             "path": path.to_string_lossy(),
         }),
         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-            let metadata = fs::read_to_string(&path)
-                .ok()
-                .map(|contents| parse_instance_lock_metadata(&contents));
+            let metadata = read_instance_lock_metadata(&file).ok();
             serde_json::json!({
                 "status": "active",
                 "path": path.to_string_lossy(),
@@ -437,6 +469,164 @@ fn instance_lock_diagnostic_at(runtime_directory: &Path, port: u16) -> serde_jso
             "path": path.to_string_lossy(),
             "detail": error.to_string(),
         }),
+    }
+}
+
+fn read_instance_lock_metadata(file: &File) -> Result<serde_json::Value> {
+    let metadata = file.metadata().context("failed to inspect instance lock")?;
+    if metadata.len() > MAX_INSTANCE_LOCK_BYTES {
+        bail!("instance lock metadata exceeds the {MAX_INSTANCE_LOCK_BYTES}-byte limit");
+    }
+    let mut reader = file.try_clone().context("failed to clone instance lock")?;
+    reader.seek(SeekFrom::Start(0))?;
+    let mut contents = String::new();
+    reader
+        .take(MAX_INSTANCE_LOCK_BYTES + 1)
+        .read_to_string(&mut contents)
+        .context("failed to read instance lock metadata")?;
+    Ok(parse_instance_lock_metadata(&contents))
+}
+
+fn validate_runtime_directory_chain(runtime_directory: &Path) -> Result<bool> {
+    let parent = runtime_directory
+        .parent()
+        .context("runtime directory has no Leetcodex data parent")?;
+    let mut complete = true;
+    for path in [parent, runtime_directory] {
+        match fs::symlink_metadata(path) {
+            Ok(metadata) if is_real_directory(&metadata) => {}
+            Ok(_) => bail!("runtime path must be a real directory: {}", path.display()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => complete = false,
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!("failed to inspect runtime directory {}", path.display())
+                });
+            }
+        }
+    }
+    Ok(complete)
+}
+
+fn prepare_runtime_directory(runtime_directory: &Path) -> Result<()> {
+    let parent = runtime_directory
+        .parent()
+        .context("runtime directory has no Leetcodex data parent")?;
+    for path in [parent, runtime_directory] {
+        match fs::symlink_metadata(path) {
+            Ok(metadata) if is_real_directory(&metadata) => {}
+            Ok(_) => bail!("runtime path must be a real directory: {}", path.display()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                create_private_runtime_directory(path)?;
+            }
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!("failed to inspect runtime directory {}", path.display())
+                });
+            }
+        }
+    }
+    if !validate_runtime_directory_chain(runtime_directory)? {
+        bail!("runtime directory chain changed while it was being prepared");
+    }
+    restrict_runtime_directory(runtime_directory)
+}
+
+fn create_private_runtime_directory(path: &Path) -> Result<()> {
+    private_runtime_directory_builder()
+        .create(path)
+        .with_context(|| format!("failed to create runtime directory {}", path.display()))
+}
+
+#[cfg(unix)]
+fn private_runtime_directory_builder() -> fs::DirBuilder {
+    use std::os::unix::fs::DirBuilderExt;
+    let mut builder = fs::DirBuilder::new();
+    builder.mode(0o700);
+    builder
+}
+
+#[cfg(not(unix))]
+fn private_runtime_directory_builder() -> fs::DirBuilder {
+    fs::DirBuilder::new()
+}
+
+fn is_real_directory(metadata: &fs::Metadata) -> bool {
+    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+        return false;
+    }
+    !metadata_is_windows_reparse_point(metadata)
+}
+
+fn is_real_file(metadata: &fs::Metadata) -> bool {
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+        return false;
+    }
+    !metadata_is_windows_reparse_point(metadata)
+}
+
+#[cfg(windows)]
+fn metadata_is_windows_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn metadata_is_windows_reparse_point(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
+fn open_instance_lock_file(path: &Path, create_new: bool) -> Result<File> {
+    let mut options = OpenOptions::new();
+    options.read(true).write(true);
+    if create_new {
+        options.create_new(true);
+    }
+    configure_lock_open_options(&mut options);
+    let file = options
+        .open(path)
+        .with_context(|| format!("failed to open Leetcodex instance lock {}", path.display()))?;
+    let metadata = file.metadata().with_context(|| {
+        format!(
+            "failed to inspect Leetcodex instance lock {}",
+            path.display()
+        )
+    })?;
+    if !is_real_file(&metadata) {
+        bail!(
+            "instance lock must be a regular file without links or reparse points: {}",
+            path.display()
+        );
+    }
+    Ok(file)
+}
+
+#[cfg(unix)]
+fn configure_lock_open_options(options: &mut OpenOptions) {
+    use std::os::unix::fs::OpenOptionsExt;
+    options.custom_flags(libc::O_NOFOLLOW);
+}
+
+#[cfg(windows)]
+fn configure_lock_open_options(options: &mut OpenOptions) {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+}
+
+#[cfg(not(any(unix, windows)))]
+fn configure_lock_open_options(_options: &mut OpenOptions) {}
+
+fn lock_path_metadata(path: &Path) -> Result<Option<fs::Metadata>> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if is_real_file(&metadata) => Ok(Some(metadata)),
+        Ok(_) => bail!(
+            "instance lock must be a regular file without links or reparse points: {}",
+            path.display()
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error)
+            .with_context(|| format!("failed to inspect instance lock {}", path.display())),
     }
 }
 
@@ -457,22 +647,11 @@ fn parse_instance_lock_metadata(contents: &str) -> serde_json::Value {
 }
 
 fn acquire_instance_lock_at(runtime_directory: &Path, port: u16) -> Result<InstanceLock> {
-    fs::create_dir_all(runtime_directory).with_context(|| {
-        format!(
-            "failed to create Leetcodex runtime directory {}",
-            runtime_directory.display()
-        )
-    })?;
-    restrict_runtime_directory(runtime_directory)?;
+    prepare_runtime_directory(runtime_directory)?;
     let path = runtime_directory.join(format!("codex-{port}.lock"));
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&path)
-        .with_context(|| format!("failed to open Leetcodex instance lock {}", path.display()))?;
-    restrict_lock_file(&path)?;
+    let create_new = lock_path_metadata(&path)?.is_none();
+    let mut file = open_instance_lock_file(&path, create_new)?;
+    restrict_lock_file(&file, &path)?;
     if let Err(error) = file.try_lock_exclusive() {
         if error.kind() == std::io::ErrorKind::WouldBlock {
             bail!(
@@ -510,14 +689,14 @@ fn restrict_runtime_directory(_path: &Path) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn restrict_lock_file(path: &Path) -> Result<()> {
+fn restrict_lock_file(file: &File, path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+    file.set_permissions(fs::Permissions::from_mode(0o600))
         .with_context(|| format!("failed to secure instance lock {}", path.display()))
 }
 
 #[cfg(not(unix))]
-fn restrict_lock_file(_path: &Path) -> Result<()> {
+fn restrict_lock_file(_file: &File, _path: &Path) -> Result<()> {
     Ok(())
 }
 
@@ -754,6 +933,60 @@ mod tests {
         );
         acquire_instance_lock_at(&root, 9337).unwrap();
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn instance_lock_rejects_linked_files_without_touching_the_target() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+
+        let base = temporary_directory();
+        let runtime = base.join("runtime");
+        let external = base.join("private.txt");
+        let lock = runtime.join("codex-9555.lock");
+        fs::create_dir_all(&runtime).unwrap();
+        fs::write(&external, "do not overwrite").unwrap();
+        fs::set_permissions(&external, fs::Permissions::from_mode(0o644)).unwrap();
+        symlink(&external, &lock).unwrap();
+
+        assert_eq!(
+            instance_lock_diagnostic_at(&runtime, 9555)["status"],
+            "unavailable"
+        );
+        assert!(acquire_instance_lock_at(&runtime, 9555).is_err());
+        assert_eq!(fs::read_to_string(&external).unwrap(), "do not overwrite");
+        assert_eq!(
+            fs::metadata(&external).unwrap().permissions().mode() & 0o777,
+            0o644
+        );
+        assert!(
+            fs::symlink_metadata(&lock)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn instance_lock_rejects_a_linked_runtime_directory() {
+        use std::os::unix::fs::symlink;
+
+        let base = temporary_directory();
+        let runtime = base.join("runtime");
+        let external = base.join("external-runtime");
+        fs::create_dir_all(&base).unwrap();
+        fs::create_dir_all(&external).unwrap();
+        symlink(&external, &runtime).unwrap();
+
+        assert_eq!(
+            instance_lock_diagnostic_at(&runtime, 9556)["status"],
+            "unavailable"
+        );
+        assert!(acquire_instance_lock_at(&runtime, 9556).is_err());
+        assert!(!external.join("codex-9556.lock").exists());
+        fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

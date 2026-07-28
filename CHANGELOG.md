@@ -2,6 +2,14 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.55] - 2026-07-28
+
+### Security
+
+- Launcher lock files are now opened without following final symbolic links on Unix or reparse points on Windows, validated through the opened file handle, and permission changes target that handle instead of a replaceable path.
+- Runtime directories are created one component at a time and reject linked or reparse-point parents; `doctor` applies the same checks and reads bounded lock metadata from the verified handle instead of following the lock path.
+- A symbolic-link or reparse-point runtime directory or `codex-<port>.lock` can no longer redirect launcher metadata writes, truncate an external file, or expose external file contents through diagnostics.
+
 ## [0.2.54] - 2026-07-28
 
 ### Security

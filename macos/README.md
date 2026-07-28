@@ -30,7 +30,7 @@ Leetcodex 把本地算法练习、代码编辑和测试结果放进 Codex 官方
 
 ## 诊断与草稿
 
-运行 `./leetcodex doctor` 可检查 Codex、账号配对浏览器、CDP 端口、renderer 注入版本与实例健康度以及草稿目录；`./leetcodex doctor --json` 可生成带顶层 `healthy` 和结构化 `drafts` 状态的诊断结果。草稿检查只读验证真实目录、可读性和 Unix 隐私权限。`./leetcodex doctor --strict --json` 会在完整运行栈不健康时返回非零退出码。Renderer 检查不会读取对话或草稿内容，LeetCode 是否已登录不影响健康结论。
+运行 `./leetcodex doctor` 可检查 Codex、账号配对浏览器、CDP 端口、renderer 注入版本与实例健康度以及草稿目录；`./leetcodex doctor --json` 可生成带顶层 `healthy` 和结构化 `drafts` 状态的诊断结果。Launcher 检查会拒绝链接的 runtime 目录或锁文件，草稿检查只读验证真实目录、可读性和 Unix 隐私权限。`./leetcodex doctor --strict --json` 会在完整运行栈不健康时返回非零退出码。Renderer 检查不会读取对话或草稿内容，LeetCode 是否已登录不影响健康结论。
 
 草稿除了保存在 Codex 内，还会备份到 `~/.leetcodex/drafts/v1/`。Codex 本地缓存被清理后，Leetcodex 会自动恢复对应站点、题目和语言的源码。原生读写会逐级验证受控目录并拒绝父级符号链接，防止草稿路径被重定向。
 

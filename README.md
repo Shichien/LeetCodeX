@@ -38,7 +38,7 @@ Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式。
 ./target/release/leetcodex attach --port 9337
 ```
 
-同一个 CDP 端口只允许一个 Leetcodex 启动器。重复双击或重复运行会保留现有会话并立即给出明确错误，避免多个 Bridge 注入互相覆盖。不同端口可以运行独立实例。
+同一个 CDP 端口只允许一个 Leetcodex 启动器。重复双击或重复运行会保留现有会话并立即给出明确错误，避免多个 Bridge 注入互相覆盖。不同端口可以运行独立实例。启动锁保存在 `~/.leetcodex/runtime/`，读写不会跟随符号链接或 Windows reparse point；检测到被重定向的 runtime 路径或锁文件时会拒绝启动。
 
 ### 一键诊断
 
@@ -50,7 +50,7 @@ Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式。
 ./target/release/leetcodex doctor --strict --json
 ```
 
-报告会包含顶层 `healthy`、Leetcodex 版本、操作系统、Codex 安装位置、账号配对浏览器、两站独立配对会话的配置目录与动态端口、启动器单实例锁、Codex CDP 状态、只读 renderer 注入健康度和结构化 `drafts` 草稿目录状态。草稿诊断只读取路径类型、可读性和 Unix 隐私权限，不创建或修改文件；Renderer 诊断只读取 Leetcodex 版本、active、面板/编辑器数量与 Bridge 队列长度，不读取对话或草稿内容。`--strict` 会在 Codex、账号浏览器、launcher、CDP、renderer 或草稿目录不安全/不可用时返回非零退出码；LeetCode 是否已登录不影响健康结论。旧版 `draftDirectory` 路径字段继续保留。提交问题时建议附上 `--json` 输出，但不要附带草稿文件内容。
+报告会包含顶层 `healthy`、Leetcodex 版本、操作系统、Codex 安装位置、账号配对浏览器、两站独立配对会话的配置目录与动态端口、启动器单实例锁、Codex CDP 状态、只读 renderer 注入健康度和结构化 `drafts` 草稿目录状态。Launcher 诊断会拒绝链接或重解析的 runtime 目录和锁文件，并从已验证句柄读取最多 4 KiB 的锁元数据；草稿诊断只读取路径类型、可读性和 Unix 隐私权限，不创建或修改文件；Renderer 诊断只读取 Leetcodex 版本、active、面板/编辑器数量与 Bridge 队列长度，不读取对话或草稿内容。`--strict` 会在 Codex、账号浏览器、launcher、CDP、renderer 或草稿目录不安全/不可用时返回非零退出码；LeetCode 是否已登录不影响健康结论。旧版 `draftDirectory` 路径字段继续保留。提交问题时建议附上 `--json` 输出，但不要附带草稿文件内容。
 
 ### 重置账号配对
 
@@ -171,6 +171,7 @@ GNU 包会单独标记为 `windows-x64-gnu`，不会替代 GitHub Release 中由
 - 不读取对话内容；只在激活时暂存并恢复官方输入框草稿。
 - 离线题库、测试和 solved 状态保存在本机；在线提交直接发送到用户选择的官方站点。
 - 草稿同时保存在 Codex WebView 和用户目录下的 `~/.leetcodex/drafts/v1/`，备份文件为仅包含源码的纯文本；原生读写拒绝受控路径中的符号链接和 Windows reparse point。
+- 启动器锁写入 `~/.leetcodex/runtime/`，目录链和锁文件必须是非符号链接、非 Windows reparse point 的真实对象；锁元数据读写均通过经过验证的文件句柄完成。
 - 账号桥使用 Codex 的本地 CDP 绑定，并要求每次启动随机生成的 256 位令牌；不会开放额外 HTTP 端口。
 - 全球站和中国站使用独立配置目录，并由 Chromium 分别分配动态回环调试端口。
 - Unix 系统上的专用账号配置目录限制为当前用户访问，并拒绝使用符号链接作为配置目录。

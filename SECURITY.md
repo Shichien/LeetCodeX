@@ -16,6 +16,7 @@ Do not publish credentials, cookies, session data, private source code, or worki
 - LeetCode credentials and cookies remain in the dedicated browser profile.
 - Dedicated browser profile roots are restricted to the current user on Unix and symbolic-link profile roots are rejected before launch, reset, or restore.
 - Draft backups are plaintext source files in the current user's `~/.leetcodex/drafts/v1/` directory. Native loads and saves reject symbolic links and Windows reparse points in every managed directory component before accessing a draft.
+- Launcher locks under `~/.leetcodex/runtime/` reject symbolic-link directories or files and Windows reparse points. Lock metadata is bounded and accessed through a no-follow verified file handle.
 - Online code is transmitted to the selected official LeetCode site when the user chooses Run or Submit.
 - The offline JavaScript judge runs code in a Web Worker with a time limit; it is not a hardened operating-system sandbox.
 

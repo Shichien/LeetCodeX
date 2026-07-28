@@ -2,6 +2,13 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.64] - 2026-07-29
+
+### Fixed
+
+- LeetCode page requests now tolerate transient macOS `WouldBlock` and cross-platform socket timeout signals instead of incorrectly reporting that the paired tab stopped responding.
+- CDP response reads use short polling with a strict 20-second overall deadline, while non-timeout I/O failures still surface immediately.
+
 ## [0.2.63] - 2026-07-29
 
 ### Fixed

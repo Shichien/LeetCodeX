@@ -1,4 +1,5 @@
 use std::fs;
+use std::io;
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -15,7 +16,9 @@ use tungstenite::{Message, WebSocket, connect};
 use url::Url;
 
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(12);
-const SOCKET_TIMEOUT: Duration = Duration::from_secs(8);
+const SOCKET_READ_POLL_TIMEOUT: Duration = Duration::from_secs(1);
+const SOCKET_WRITE_TIMEOUT: Duration = Duration::from_secs(8);
+const EVALUATION_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_CODE_BYTES: usize = 1_000_000;
 const MAX_DATA_INPUT_BYTES: usize = 1_000_000;
 const MAX_SEARCH_CHARS: usize = 200;
@@ -1017,10 +1020,29 @@ fn evaluate(site: Site, expression: &str) -> Result<Value> {
         .to_string()
         .into(),
     ))?;
+    read_evaluation_response(|| socket.read(), Instant::now() + EVALUATION_TIMEOUT)
+}
+
+fn read_evaluation_response<F>(mut read: F, deadline: Instant) -> Result<Value>
+where
+    F: FnMut() -> tungstenite::Result<Message>,
+{
     loop {
-        let message = socket
-            .read()
-            .context("paired LeetCode tab stopped responding")?;
+        if Instant::now() >= deadline {
+            bail!("paired LeetCode tab timed out while waiting for the page request");
+        }
+        let message = match read() {
+            Ok(message) => message,
+            Err(tungstenite::Error::Io(error))
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                ) =>
+            {
+                continue;
+            }
+            Err(error) => return Err(error).context("paired LeetCode tab stopped responding"),
+        };
         let Message::Text(text) = message else {
             continue;
         };
@@ -1190,8 +1212,8 @@ fn set_socket_timeouts(socket: &mut WebSocket<MaybeTlsStream<TcpStream>>) -> Res
     let MaybeTlsStream::Plain(stream) = socket.get_mut() else {
         bail!("paired browser debugger must use a plain loopback socket");
     };
-    stream.set_read_timeout(Some(SOCKET_TIMEOUT))?;
-    stream.set_write_timeout(Some(SOCKET_TIMEOUT))?;
+    stream.set_read_timeout(Some(SOCKET_READ_POLL_TIMEOUT))?;
+    stream.set_write_timeout(Some(SOCKET_WRITE_TIMEOUT))?;
     Ok(())
 }
 
@@ -1265,6 +1287,73 @@ fn windows_browser_candidates(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::VecDeque;
+
+    fn evaluation_message(id: u64, value: Value) -> Message {
+        Message::Text(
+            json!({
+                "id": id,
+                "result": { "result": { "value": value } }
+            })
+            .to_string()
+            .into(),
+        )
+    }
+
+    #[test]
+    fn evaluation_read_retries_transient_socket_timeouts() {
+        let mut reads = VecDeque::from([
+            Err(tungstenite::Error::Io(io::Error::from(
+                io::ErrorKind::WouldBlock,
+            ))),
+            Ok(evaluation_message(99, json!("unrelated event"))),
+            Err(tungstenite::Error::Io(io::Error::from(
+                io::ErrorKind::TimedOut,
+            ))),
+            Ok(evaluation_message(1, json!({ "ok": true }))),
+        ]);
+
+        let response = read_evaluation_response(
+            || reads.pop_front().expect("test read queue exhausted"),
+            Instant::now() + Duration::from_secs(1),
+        )
+        .unwrap();
+
+        assert_eq!(response, json!({ "ok": true }));
+    }
+
+    #[test]
+    fn evaluation_read_stops_at_the_total_deadline() {
+        let error = read_evaluation_response(
+            || {
+                Err(tungstenite::Error::Io(io::Error::from(
+                    io::ErrorKind::WouldBlock,
+                )))
+            },
+            Instant::now() - Duration::from_millis(1),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("timed out"));
+    }
+
+    #[test]
+    fn evaluation_read_fails_immediately_for_non_timeout_io_errors() {
+        let mut read_count = 0;
+        let error = read_evaluation_response(
+            || {
+                read_count += 1;
+                Err(tungstenite::Error::Io(io::Error::from(
+                    io::ErrorKind::ConnectionReset,
+                )))
+            },
+            Instant::now() + Duration::from_secs(1),
+        )
+        .unwrap_err();
+
+        assert_eq!(read_count, 1);
+        assert!(error.to_string().contains("stopped responding"));
+    }
 
     #[test]
     fn sites_use_separate_hosts_and_profiles() {

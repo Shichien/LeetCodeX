@@ -2,6 +2,14 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.63] - 2026-07-29
+
+### Fixed
+
+- Restarting the native launcher on the same release now replaces a renderer bound to the previous random Bridge token instead of retaining an unusable same-version API.
+- A separate non-secret Bridge session identifier coordinates native reinjection while preventing the static Codex++ userscript from replacing a working native session.
+- The official Editorial query now uses the field set shared by `leetcode.com` and `leetcode.cn`, preserving dual-site answer practice despite their different Article schemas.
+
 ## [0.2.62] - 2026-07-29
 
 ### Added

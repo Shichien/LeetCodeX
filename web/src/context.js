@@ -121,6 +121,15 @@ export function shouldResumeActiveSession(previous, nextVersion, persistedActive
   return persistedActive === true;
 }
 
+export function shouldReuseBridgeSession(previous, version, currentSession) {
+  if (previous?.version !== version) return false;
+  if (previous?.bridgeSession === currentSession) return true;
+  const currentBound = typeof currentSession === "string" && /^[a-f0-9]{64}$/.test(currentSession);
+  const previousBound = typeof previous?.bridgeSession === "string"
+    && /^[a-f0-9]{64}$/.test(previous.bridgeSession);
+  return !currentBound && previousBound;
+}
+
 export function isCurrentQuestionRequest(state, request) {
   return state.active
     && state.online

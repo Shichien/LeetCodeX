@@ -22,6 +22,7 @@ import {
   resolveDraftCode,
   runButtonState,
   shouldResumeActiveSession,
+  shouldReuseBridgeSession,
   siteReconnectRetryDelay,
   storeRemoteCatalog,
 } from "./context.js";
@@ -45,6 +46,7 @@ import { localStarter } from "./templates.js";
 
 const VERSION = APP_VERSION;
 const BRIDGE_TOKEN = "__LEETCODEX_BRIDGE_TOKEN__";
+const BRIDGE_SESSION = "__LEETCODEX_BRIDGE_SESSION__";
 const BRIDGE_TIMEOUT_MS = 20_000;
 const MAX_BRIDGE_PAYLOAD_BYTES = 1_500_000;
 const BRIDGE_STATE_KEY = "__LEETCODEX_BRIDGE_STATE__";
@@ -112,7 +114,7 @@ const SUBMISSION_LANGUAGES = [
 ];
 
 const previous = window[GLOBAL_KEY];
-if (previous?.version === VERSION) {
+if (shouldReuseBridgeSession(previous, VERSION, BRIDGE_SESSION)) {
   previous.ensure?.();
 } else {
   const resumeActive = shouldResumeActiveSession(previous, VERSION, loadActiveSession());
@@ -1629,6 +1631,7 @@ function install({ resumeActive = false } = {}) {
 
   window[GLOBAL_KEY] = {
     version: VERSION,
+    bridgeSession: BRIDGE_SESSION,
     get active() {
       return state.active;
     },

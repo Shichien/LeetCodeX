@@ -368,7 +368,10 @@ fn attach_and_watch_locked(port: u16, _instance_lock: InstanceLock) -> Result<()
     .context("failed to install the Ctrl+C handler")?;
 
     let bridge_token = bridge::generate_token();
-    let script = LEETCODEX_SCRIPT.replace("__LEETCODEX_BRIDGE_TOKEN__", &bridge_token);
+    let bridge_session = bridge::generate_token();
+    let script = LEETCODEX_SCRIPT
+        .replace("__LEETCODEX_BRIDGE_TOKEN__", &bridge_token)
+        .replace("__LEETCODEX_BRIDGE_SESSION__", &bridge_session);
     println!(
         "Leetcodex is active. Press Ctrl+Alt+L for LeetCode or Ctrl+Alt+T for typing practice."
     );

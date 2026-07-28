@@ -23,6 +23,7 @@ import {
   resolveDraftCode,
   runButtonState,
   shouldResumeActiveSession,
+  shouldReuseBridgeSession,
   siteReconnectRetryDelay,
   storeRemoteCatalog,
 } from "../src/context.js";
@@ -98,6 +99,17 @@ test("only an active older injection resumes after replacement", () => {
   assert.equal(shouldResumeActiveSession(null, "0.2.9"), false);
   assert.equal(shouldResumeActiveSession(null, "0.2.9", true), true);
   assert.equal(shouldResumeActiveSession({ version: "0.2.8", active: false }, "0.2.9", true), false);
+});
+
+test("same-version injection is reused only for the same or static-safe Bridge session", () => {
+  const first = "a".repeat(64);
+  const second = "b".repeat(64);
+  const native = { version: "0.2.63", bridgeSession: first };
+  assert.equal(shouldReuseBridgeSession(native, "0.2.63", first), true);
+  assert.equal(shouldReuseBridgeSession(native, "0.2.63", second), false);
+  assert.equal(shouldReuseBridgeSession(native, "0.2.63", "__LEETCODEX_BRIDGE_SESSION__"), true);
+  assert.equal(shouldReuseBridgeSession({ version: "0.2.63" }, "0.2.63", first), false);
+  assert.equal(shouldReuseBridgeSession(native, "0.2.62", first), false);
 });
 
 test("offline drafts ignore a stale remote problem slug", () => {

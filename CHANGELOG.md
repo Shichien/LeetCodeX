@@ -2,6 +2,13 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.59] - 2026-07-28
+
+### Fixed
+
+- Official problem descriptions now retain paragraph boundaries and wrap LeetCode inline `<code>` values in Markdown-style backticks, while preformatted blocks remain unquoted.
+- Collapsed and expanded descriptions now preserve source line breaks and wrap long tokens within the available composer width instead of overflowing as one unbroken line.
+
 ## [0.2.58] - 2026-07-28
 
 ### Fixed

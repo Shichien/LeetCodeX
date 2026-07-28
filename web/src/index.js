@@ -26,7 +26,12 @@ import {
   storeRemoteCatalog,
 } from "./context.js";
 import { createCodeEditor } from "./editor.js";
-import { normalizeProblemText, problemFrontendId, truncateDisplayText } from "./content.js";
+import {
+  normalizeProblemText,
+  problemFrontendId,
+  serializeProblemNode,
+  truncateDisplayText,
+} from "./content.js";
 import {
   OFFICIAL_JUDGE_TIMEOUT_MS,
   isPendingJudgeResult,
@@ -1801,20 +1806,6 @@ function bridgeRequest(
 function htmlToText(value) {
   const documentValue = new DOMParser().parseFromString(String(value ?? ""), "text/html");
   return normalizeProblemText(serializeProblemNode(documentValue.body));
-}
-
-function serializeProblemNode(node) {
-  if (node.nodeType === Node.TEXT_NODE) return node.nodeValue ?? "";
-  if (!(node instanceof Element)) return "";
-  const tag = node.tagName.toLowerCase();
-  if (tag === "br") return "\n";
-  if (tag === "pre") return `${node.textContent ?? ""}\n`;
-  const content = Array.from(node.childNodes, serializeProblemNode).join("");
-  if (tag === "li") return `- ${content}\n`;
-  if (["p", "div", "section", "article", "h1", "h2", "h3", "h4", "tr"].includes(tag)) {
-    return `${content}\n`;
-  }
-  return content;
 }
 
 function delay(milliseconds) {

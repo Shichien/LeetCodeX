@@ -24,6 +24,24 @@ export function normalizeProblemText(value) {
     .trim();
 }
 
+export function serializeProblemNode(node) {
+  if (node?.nodeType === 3) return node.nodeValue ?? "";
+  if (node?.nodeType !== 1) return "";
+
+  const tag = String(node.tagName ?? "").toLowerCase();
+  if (tag === "br") return "\n";
+  if (tag === "pre") return `${node.textContent ?? ""}\n\n`;
+
+  const content = Array.from(node.childNodes ?? [], serializeProblemNode).join("");
+  if (tag === "code") return `\`${content}\``;
+  if (tag === "li") return `- ${content}\n`;
+  if (["p", "div", "section", "article", "blockquote", "h1", "h2", "h3", "h4", "tr"].includes(tag)) {
+    return `${content}\n\n`;
+  }
+  if (["ul", "ol", "table", "thead", "tbody", "tfoot"].includes(tag)) return `${content}\n`;
+  return content;
+}
+
 export function problemFrontendId(problem) {
   for (const value of [problem?.frontendQuestionId, problem?.questionFrontendId]) {
     const normalized = String(value ?? "").trim();

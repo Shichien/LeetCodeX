@@ -41,8 +41,86 @@ pub fn save(site: &str, problem: &str, language: &str, code: &str) -> Result<Val
     Ok(json!({ "saved": true }))
 }
 
-pub fn root_directory() -> Result<PathBuf> {
-    draft_root()
+pub fn diagnostic() -> Value {
+    match draft_root() {
+        Ok(root) => diagnostic_at(&root),
+        Err(error) => json!({
+            "status": "error",
+            "detail": format!("{error:#}"),
+        }),
+    }
+}
+
+fn diagnostic_at(root: &Path) -> Value {
+    let path = root.to_string_lossy().into_owned();
+    for candidate in root.ancestors().take(3) {
+        match fs::symlink_metadata(candidate) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.file_type().is_dir() => {
+                return json!({
+                    "status": "invalid",
+                    "path": path,
+                    "detail": format!(
+                        "draft path component must be a real directory: {}",
+                        candidate.display()
+                    ),
+                });
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => {
+                return json!({
+                    "status": "error",
+                    "path": path,
+                    "detail": format!(
+                        "failed to inspect draft path component {}: {error}",
+                        candidate.display()
+                    ),
+                });
+            }
+        }
+    }
+
+    let metadata = match fs::symlink_metadata(root) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            return json!({ "status": "not_created", "path": path });
+        }
+        Err(error) => {
+            return json!({
+                "status": "error",
+                "path": path,
+                "detail": format!("failed to inspect draft directory: {error}"),
+            });
+        }
+    };
+    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+        return json!({
+            "status": "invalid",
+            "path": path,
+            "detail": "draft directory must be a real directory",
+        });
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o077 != 0 {
+            return json!({
+                "status": "insecure",
+                "path": path,
+                "detail": "draft directory permissions must not grant group or other access",
+            });
+        }
+    }
+
+    match fs::read_dir(root) {
+        Ok(_) => json!({ "status": "ready", "path": path }),
+        Err(error) => json!({
+            "status": "error",
+            "path": path,
+            "detail": format!("failed to read draft directory: {error}"),
+        }),
+    }
 }
 
 fn save_at(root: &Path, site: &str, problem: &str, language: &str, code: &str) -> Result<()> {
@@ -283,6 +361,42 @@ mod tests {
         assert!(draft_path(&root, "global", "../secret", "cpp").is_err());
         assert!(draft_path(&root, "global", "two-sum", "../../txt").is_err());
         assert!(draft_path(&root, "other", "two-sum", "cpp").is_err());
+    }
+
+    #[test]
+    fn draft_diagnostic_accepts_a_missing_or_ready_private_root() {
+        let base = temporary_root();
+        fs::create_dir_all(&base).unwrap();
+        let root = base.join("drafts").join("v1");
+        assert_eq!(diagnostic_at(&root)["status"], "not_created");
+
+        fs::create_dir_all(&root).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        assert_eq!(diagnostic_at(&root)["status"], "ready");
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn draft_diagnostic_rejects_public_permissions_and_symbolic_links() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+
+        let base = temporary_root();
+        let root = base.join("drafts").join("v1");
+        fs::create_dir_all(&root).unwrap();
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(diagnostic_at(&root)["status"], "insecure");
+
+        fs::remove_dir_all(base.join("drafts")).unwrap();
+        let external = base.join("external");
+        fs::create_dir_all(&external).unwrap();
+        symlink(&external, base.join("drafts")).unwrap();
+        assert_eq!(diagnostic_at(&root)["status"], "invalid");
+        fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

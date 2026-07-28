@@ -225,9 +225,18 @@ fn run_doctor(codex_path: Option<&Path>, port: u16, json_output: bool, strict: b
             serde_json::json!({ "status": "unavailable" }),
         )
     };
-    let draft_directory = drafts::root_directory()
-        .map(|path| path.to_string_lossy().into_owned())
-        .unwrap_or_else(|error| format!("unavailable: {error:#}"));
+    let drafts = drafts::diagnostic();
+    let draft_directory = drafts["path"]
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| {
+            format!(
+                "unavailable: {}",
+                drafts["detail"]
+                    .as_str()
+                    .unwrap_or("draft directory could not be resolved")
+            )
+        });
     let leetcode = serde_json::json!({
         "global": leetcode::pairing_diagnostic(leetcode::Site::Global),
         "china": leetcode::pairing_diagnostic(leetcode::Site::China),
@@ -244,6 +253,7 @@ fn run_doctor(codex_path: Option<&Path>, port: u16, json_output: bool, strict: b
         "launcher": launcher,
         "cdp": cdp,
         "renderer": renderer,
+        "drafts": drafts,
         "draftDirectory": draft_directory,
     });
     let healthy = doctor_report_is_healthy(&report);
@@ -265,10 +275,7 @@ fn run_doctor(codex_path: Option<&Path>, port: u16, json_output: bool, strict: b
         print_diagnostic("Launcher lock", &report["launcher"]);
         print_diagnostic("Codex CDP", &report["cdp"]);
         print_diagnostic("Leetcodex renderer", &report["renderer"]);
-        println!(
-            "Draft backup: {}",
-            report["draftDirectory"].as_str().unwrap_or("unavailable")
-        );
+        print_diagnostic("Draft backup", &report["drafts"]);
         println!("Overall: {}", if healthy { "healthy" } else { "degraded" });
     }
     if strict && !healthy {
@@ -287,9 +294,10 @@ fn doctor_report_is_healthy(report: &serde_json::Value) -> bool {
     ]
     .iter()
     .all(|(component, expected)| report[*component]["status"].as_str() == Some(*expected))
-        && report["draftDirectory"]
-            .as_str()
-            .is_some_and(|path| !path.starts_with("unavailable:"))
+        && matches!(
+            report["drafts"]["status"].as_str(),
+            Some("ready" | "not_created")
+        )
 }
 
 fn print_diagnostic(label: &str, value: &serde_json::Value) {
@@ -782,6 +790,7 @@ mod tests {
             "launcher": { "status": "active" },
             "cdp": { "status": "connected" },
             "renderer": { "status": "active" },
+            "drafts": { "status": "ready" },
             "draftDirectory": "/tmp/leetcodex-drafts",
             "leetcode": {
                 "global": { "status": "not_running" },
@@ -806,8 +815,7 @@ mod tests {
             report[component]["status"] = previous;
         }
 
-        report["draftDirectory"] =
-            serde_json::Value::String("unavailable: HOME missing".to_owned());
+        report["drafts"]["status"] = serde_json::Value::String("insecure".to_owned());
         assert!(!doctor_report_is_healthy(&report));
     }
 }

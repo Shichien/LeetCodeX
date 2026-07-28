@@ -2,6 +2,13 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.53] - 2026-07-28
+
+### Security
+
+- `doctor` now reports a structured, read-only `drafts` diagnostic and refuses to classify symbolic-link roots, non-directory components, unreadable roots, or Unix roots granting group/other access as healthy.
+- The legacy `draftDirectory` path remains available, while `doctor --strict` now derives draft health from verified directory state instead of successful path construction alone.
+
 ## [0.2.52] - 2026-07-28
 
 ### Added

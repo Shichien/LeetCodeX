@@ -47,9 +47,10 @@ Codex 打开后按 `Ctrl+Alt+L` 进入或退出刷题模式。
 ```bash
 ./target/release/leetcodex doctor
 ./target/release/leetcodex doctor --json
+./target/release/leetcodex doctor --strict --json
 ```
 
-报告会包含 Leetcodex 版本、操作系统、Codex 安装位置、账号配对浏览器、两站独立配对会话的配置目录与动态端口、启动器单实例锁、Codex CDP 状态、只读 renderer 注入健康度和原生草稿备份目录。Renderer 诊断只读取 Leetcodex 版本、active、面板/编辑器数量与 Bridge 队列长度，不读取对话或草稿内容。提交问题时建议附上 `--json` 输出，但不要附带草稿文件内容。
+报告会包含顶层 `healthy`、Leetcodex 版本、操作系统、Codex 安装位置、账号配对浏览器、两站独立配对会话的配置目录与动态端口、启动器单实例锁、Codex CDP 状态、只读 renderer 注入健康度和原生草稿备份目录。Renderer 诊断只读取 Leetcodex 版本、active、面板/编辑器数量与 Bridge 队列长度，不读取对话或草稿内容。`--strict` 会在 Codex、账号浏览器、launcher、CDP、renderer 或草稿目录不可用时返回非零退出码；LeetCode 是否已登录不影响健康结论。提交问题时建议附上 `--json` 输出，但不要附带草稿文件内容。
 
 ### 重置账号配对
 

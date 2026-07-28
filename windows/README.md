@@ -34,7 +34,7 @@ Both commands only replace or remove scripts carrying the Leetcodex marker. An u
 
 ## Diagnostics and drafts
 
-Run `.\leetcodex.exe doctor` to inspect Codex discovery, the account browser, the CDP port, renderer injection version and instance health, and the draft directory. Renderer diagnostics do not read conversations or draft contents. Use `--json` when attaching diagnostics to an issue.
+Run `.\leetcodex.exe doctor` to inspect Codex discovery, the account browser, the CDP port, renderer injection version and instance health, and the draft directory. JSON output includes a top-level `healthy` value. Use `.\leetcodex.exe doctor --strict --json` when automation needs a nonzero exit code for an unhealthy full stack. Renderer diagnostics do not read conversations or draft contents, and LeetCode sign-in is not required for a healthy result.
 
 Drafts are stored in Codex and backed up under `%USERPROFILE%\.leetcodex\drafts\v1\`. Leetcodex restores the matching site, problem, and language draft if Codex local storage is cleared.
 

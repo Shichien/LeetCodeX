@@ -2,6 +2,13 @@
 
 All notable changes to Leetcodex are documented here. Versions follow Semantic Versioning.
 
+## [0.2.52] - 2026-07-28
+
+### Added
+
+- `doctor --json` now includes a top-level `healthy` value derived from Codex discovery, account-browser discovery, launcher ownership, CDP connectivity, renderer health, and draft-directory availability.
+- `doctor --strict` prints the normal human or JSON report and exits unsuccessfully when the full stack is degraded, allowing support and deployment scripts to gate on diagnostics without parsing prose.
+
 ## [0.2.51] - 2026-07-28
 
 ### Fixed

@@ -66,6 +66,9 @@ enum Commands {
         port: u16,
         #[arg(long)]
         json: bool,
+        /// Exit unsuccessfully when the full launcher and renderer stack is not healthy.
+        #[arg(long)]
+        strict: bool,
     },
     /// Back up and reset one dedicated LeetCode account browser profile.
     ResetPairing {
@@ -114,7 +117,8 @@ fn run_cli() -> Result<()> {
             codex_path,
             port,
             json,
-        } => run_doctor(codex_path.as_deref(), port, json),
+            strict,
+        } => run_doctor(codex_path.as_deref(), port, json, strict),
         Commands::ResetPairing { site, yes } => reset_pairing(&site, yes),
         Commands::ListPairingBackups { site, json } => list_pairing_backups(&site, json),
         Commands::RestorePairing { site, backup, yes } => restore_pairing(&site, &backup, yes),
@@ -175,7 +179,7 @@ fn restore_pairing(site: &str, backup: &str, confirmed: bool) -> Result<()> {
     Ok(())
 }
 
-fn run_doctor(codex_path: Option<&Path>, port: u16, json_output: bool) -> Result<()> {
+fn run_doctor(codex_path: Option<&Path>, port: u16, json_output: bool, strict: bool) -> Result<()> {
     validate_port(port)?;
     let codex = match discovery::resolve_codex_application(codex_path) {
         Ok(application) => serde_json::json!({
@@ -229,7 +233,7 @@ fn run_doctor(codex_path: Option<&Path>, port: u16, json_output: bool) -> Result
         "china": leetcode::pairing_diagnostic(leetcode::Site::China),
     });
     let launcher = instance_lock_diagnostic(port);
-    let report = serde_json::json!({
+    let mut report = serde_json::json!({
         "application": "Leetcodex",
         "version": env!("CARGO_PKG_VERSION"),
         "platform": std::env::consts::OS,
@@ -242,6 +246,8 @@ fn run_doctor(codex_path: Option<&Path>, port: u16, json_output: bool) -> Result
         "renderer": renderer,
         "draftDirectory": draft_directory,
     });
+    let healthy = doctor_report_is_healthy(&report);
+    report["healthy"] = serde_json::Value::Bool(healthy);
 
     if json_output {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -263,8 +269,27 @@ fn run_doctor(codex_path: Option<&Path>, port: u16, json_output: bool) -> Result
             "Draft backup: {}",
             report["draftDirectory"].as_str().unwrap_or("unavailable")
         );
+        println!("Overall: {}", if healthy { "healthy" } else { "degraded" });
+    }
+    if strict && !healthy {
+        bail!("doctor strict check failed because the full Leetcodex stack is not healthy");
     }
     Ok(())
+}
+
+fn doctor_report_is_healthy(report: &serde_json::Value) -> bool {
+    [
+        ("codex", "found"),
+        ("accountBrowser", "found"),
+        ("launcher", "active"),
+        ("cdp", "connected"),
+        ("renderer", "active"),
+    ]
+    .iter()
+    .all(|(component, expected)| report[*component]["status"].as_str() == Some(*expected))
+        && report["draftDirectory"]
+            .as_str()
+            .is_some_and(|path| !path.starts_with("unavailable:"))
 }
 
 fn print_diagnostic(label: &str, value: &serde_json::Value) {
@@ -740,5 +765,49 @@ mod tests {
         assert!(Cli::try_parse_from(["leetcodex", "run", "--timeout-seconds", "0"]).is_err());
         assert!(Cli::try_parse_from(["leetcodex", "run", "--timeout-seconds", "301"]).is_err());
         assert!(Cli::try_parse_from(["leetcodex", "run", "--timeout-seconds", "45"]).is_ok());
+    }
+
+    #[test]
+    fn doctor_strict_flag_is_explicit_and_composable_with_json() {
+        assert!(Cli::try_parse_from(["leetcodex", "doctor"]).is_ok());
+        assert!(Cli::try_parse_from(["leetcodex", "doctor", "--strict"]).is_ok());
+        assert!(Cli::try_parse_from(["leetcodex", "doctor", "--strict", "--json"]).is_ok());
+    }
+
+    #[test]
+    fn doctor_health_requires_the_full_stack_but_not_optional_pairing() {
+        let mut report = serde_json::json!({
+            "codex": { "status": "found" },
+            "accountBrowser": { "status": "found" },
+            "launcher": { "status": "active" },
+            "cdp": { "status": "connected" },
+            "renderer": { "status": "active" },
+            "draftDirectory": "/tmp/leetcodex-drafts",
+            "leetcode": {
+                "global": { "status": "not_running" },
+                "china": { "status": "not_running" }
+            }
+        });
+        assert!(doctor_report_is_healthy(&report));
+
+        for (component, status) in [
+            ("codex", "error"),
+            ("accountBrowser", "error"),
+            ("launcher", "available"),
+            ("cdp", "not_running"),
+            ("renderer", "degraded"),
+        ] {
+            let previous = report[component]["status"].clone();
+            report[component]["status"] = serde_json::Value::String(status.to_owned());
+            assert!(
+                !doctor_report_is_healthy(&report),
+                "{component} must affect health"
+            );
+            report[component]["status"] = previous;
+        }
+
+        report["draftDirectory"] =
+            serde_json::Value::String("unavailable: HOME missing".to_owned());
+        assert!(!doctor_report_is_healthy(&report));
     }
 }
